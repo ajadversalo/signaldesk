@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import csv
 import os
 import threading
 import time
 from dataclasses import asdict
+from pathlib import Path
 
 from flask import Flask, jsonify, render_template, request
 
@@ -17,6 +19,31 @@ app = Flask(__name__)
 _cache: dict[str, object] = {}
 _lock = threading.Lock()
 CACHE_SECONDS = int(os.getenv("PREDICTION_CACHE_SECONDS", "900"))
+CSP_RESULTS_FILE = Path(__file__).parent / "legacy" / "csp_candidates_v4.csv"
+
+
+def get_csp_results() -> tuple[list[dict[str, object]], str | None]:
+    """Load the latest V4 screener output without rerunning the market scan."""
+    if not CSP_RESULTS_FILE.exists():
+        return [], None
+    numeric_fields = {
+        "ranking_score", "strike", "bid_credit", "annualized_return_pct",
+        "abs_delta_est", "prob_itm_est_pct", "otm_pct", "spread_pct",
+        "v2_relative_strength_score", "open_interest", "dte", "price",
+    }
+    rows: list[dict[str, object]] = []
+    with CSP_RESULTS_FILE.open(encoding="utf-8-sig", newline="") as handle:
+        for source in csv.DictReader(handle):
+            row: dict[str, object] = dict(source)
+            for field in numeric_fields:
+                value = source.get(field, "").strip()
+                row[field] = float(value) if value else None
+            rows.append(row)
+    generated = time.strftime(
+        "%b %d, %Y at %I:%M %p",
+        time.localtime(CSP_RESULTS_FILE.stat().st_mtime),
+    )
+    return rows, generated
 
 
 def get_prediction(force: bool = False):
@@ -121,6 +148,16 @@ def history():
     except Exception as exc:
         app.logger.exception("History failed")
         return render_template("history.html", stats=None, error=str(exc)), 503
+
+
+@app.get("/csp")
+def csp_screener():
+    try:
+        rows, generated = get_csp_results()
+        return render_template("csp.html", rows=rows, generated=generated, error=None)
+    except Exception as exc:
+        app.logger.exception("CSP results failed")
+        return render_template("csp.html", rows=[], generated=None, error=str(exc)), 503
 
 
 if __name__ == "__main__":
