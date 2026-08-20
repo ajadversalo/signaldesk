@@ -100,6 +100,8 @@ def index():
             storage_error=storage_error, short_put=short_put,
             short_put_error=short_put_error, strike_value=strike_value,
             premium_value=premium_value,
+            latest_settled=(next((row for row in stats["recent"] if row["actual_direction"]), None)
+                            if stats else None),
         )
     except Exception as exc:
         app.logger.exception("Prediction failed")
@@ -158,6 +160,25 @@ def csp_screener():
     except Exception as exc:
         app.logger.exception("CSP results failed")
         return render_template("csp.html", rows=[], generated=None, error=str(exc)), 503
+
+
+@app.get("/methodology")
+def methodology():
+    try:
+        result, stories, cached = get_prediction()
+        prediction = asdict(result)
+        beats_baseline = prediction["validation_accuracy"] > max(
+            prediction["always_up_accuracy"], prediction["momentum_accuracy"],
+            prediction["fifty_fifty_accuracy"],
+        )
+        return render_template(
+            "methodology.html", prediction=prediction, stories=stories[:10],
+            cached=cached, beats_baseline=beats_baseline, error=None,
+        )
+    except Exception as exc:
+        app.logger.exception("Methodology failed")
+        return render_template("methodology.html", prediction=None, stories=[],
+                               cached=False, beats_baseline=False, error=str(exc)), 503
 
 
 if __name__ == "__main__":
