@@ -7,6 +7,7 @@ from datetime import datetime
 from html import escape
 import json
 from pathlib import Path
+import traceback
 
 import pandas as pd
 import yfinance as yf
@@ -20,6 +21,15 @@ V2_OUTPUT_FILE = Path(__file__).with_name("csp_candidates_v4_v2.csv")
 V3_OUTPUT_FILE = Path(__file__).with_name("csp_candidates_v4_v3.csv")
 REPORT_FILE = Path(__file__).with_name("csp_results_v4.html")
 REJECTIONS_FILE = Path(__file__).with_name("csp_v3_rejections_v4.csv")
+
+
+def yahoo_history(ticker: yf.Ticker, symbol: str, period: str = "1y") -> pd.DataFrame:
+    """Fetch Yahoo history without letting transient provider errors abort V4."""
+    try:
+        return ticker.history(period=period, auto_adjust=True)
+    except Exception as exc:
+        print(f"{symbol:<6} Yahoo history unavailable: {exc}")
+        return pd.DataFrame()
 
 
 def v2_stock_components(history: pd.DataFrame, spy_close: pd.Series, info: dict) -> dict:
@@ -217,8 +227,10 @@ def main() -> None:
     print("=" * 88)
     print("V2 and V3 run independently against the same Yahoo Finance option quotes")
 
-    spy_history = yf.Ticker("SPY").history(period="1y", auto_adjust=True)
+    spy_history = yahoo_history(yf.Ticker("SPY"), "SPY")
     spy_close = spy_history["Close"] if not spy_history.empty else pd.Series(dtype=float)
+    if spy_close.empty:
+        print("SPY baseline unavailable; V2 relative-strength components will score as 0.")
 
     # V4 deliberately uses one quote source for both models. v3's processing
     # function accepts an IB object, but this flag routes every option quote to
@@ -231,21 +243,32 @@ def main() -> None:
     v3_candidates: list[dict] = []
     rejections: list[dict] = []
     component_cache: dict[str, dict] = {}
+    unavailable_history_count = 0
     try:
         for symbol in v3.WATCHLIST:
+            symbol_v2: list[dict] = []
             ticker = yf.Ticker(symbol)
-            history = ticker.history(period="1y", auto_adjust=True)
-            try:
-                info = ticker.info or {}
-            except Exception:
-                info = {}
+            history = yahoo_history(ticker, symbol)
             if len(history) >= 220:
-                components = v2_stock_components(history, spy_close, info)
-                component_cache[symbol] = components
-                symbol_v2 = scan_v2_candidates(ticker, history, info, components)
-                for item in symbol_v2:
-                    item["symbol"] = symbol
-                v2_candidates.extend(symbol_v2)
+                try:
+                    info = ticker.info or {}
+                except Exception:
+                    info = {}
+                try:
+                    components = v2_stock_components(history, spy_close, info)
+                    component_cache[symbol] = components
+                    symbol_v2 = scan_v2_candidates(ticker, history, info, components)
+                    for item in symbol_v2:
+                        item["symbol"] = symbol
+                    v2_candidates.extend(symbol_v2)
+                except Exception as exc:
+                    print(f"{symbol:<6} V2 scan skipped: {exc}")
+                    traceback.print_exc()
+                    rejections.append({"symbol": symbol, "reason": f"v2 symbol error: {exc}"})
+            else:
+                if history.empty:
+                    unavailable_history_count += 1
+                rejections.append({"symbol": symbol, "reason": "v2 insufficient/unavailable price history"})
 
             found, rejected = v3.process_symbol(symbol, ib)
             rejections.extend(rejected)
@@ -255,6 +278,11 @@ def main() -> None:
     finally:
         if ib.isConnected():
             ib.disconnect()
+
+    if unavailable_history_count >= len(v3.WATCHLIST) // 2 and OUTPUT_FILE.exists():
+        raise RuntimeError(
+            "Yahoo Finance history unavailable for most symbols; keeping previous V4 output."
+        )
 
     separate = separate_results(v2_candidates, v3_candidates)
     if separate:

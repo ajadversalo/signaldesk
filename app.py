@@ -46,6 +46,11 @@ def run_csp_screener(force: bool = False) -> None:
         )
         if completed.returncode != 0:
             detail = completed.stderr.strip() or completed.stdout.strip()
+            if CSP_RESULTS_FILE.exists():
+                app.logger.warning(
+                    "CSP V4 refresh failed; serving stale results: %s", detail
+                )
+                return
             raise RuntimeError(
                 f"CSP V4 scan failed with exit code {completed.returncode}: {detail}"
             )
