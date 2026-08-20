@@ -10,7 +10,7 @@ from dataclasses import asdict
 from flask import Flask, jsonify, render_template, request
 
 from database import prediction_stats, record_prediction
-from xsp_predictor import run
+from xsp_predictor import MODEL_VERSION, run
 
 
 app = Flask(__name__)
@@ -48,13 +48,14 @@ def index():
         storage_error = None
         try:
             saved = record_prediction(result)
-            stats = prediction_stats()
+            stats = prediction_stats(result.model_version)
         except Exception as exc:
             app.logger.exception("Persistence failed")
             saved, stats, storage_error = False, None, str(exc)
         prediction = asdict(result)
         beats_baseline = prediction["validation_accuracy"] > max(
-            prediction["always_up_accuracy"], prediction["momentum_accuracy"]
+            prediction["always_up_accuracy"], prediction["momentum_accuracy"],
+            prediction["fifty_fifty_accuracy"],
         )
         return render_template(
             "index.html", prediction=prediction, stories=stories[:10], cached=cached,
@@ -73,7 +74,7 @@ def prediction_api():
         result, stories, cached = get_prediction(force=request.args.get("refresh") == "1")
         record_prediction(result)
         return jsonify({"prediction": asdict(result), "headlines": stories,
-                        "stats": prediction_stats(), "cached": cached})
+                        "stats": prediction_stats(result.model_version), "cached": cached})
     except Exception as exc:
         return jsonify({"error": str(exc)}), 503
 
@@ -86,7 +87,7 @@ def health():
 @app.get("/api/stats")
 def stats_api():
     try:
-        return jsonify(prediction_stats())
+        return jsonify(prediction_stats(MODEL_VERSION))
     except Exception as exc:
         return jsonify({"error": str(exc)}), 503
 
@@ -96,7 +97,7 @@ def history():
     try:
         result, _, _ = get_prediction()
         record_prediction(result)
-        return render_template("history.html", stats=prediction_stats(), error=None)
+        return render_template("history.html", stats=prediction_stats(result.model_version), error=None)
     except Exception as exc:
         app.logger.exception("History failed")
         return render_template("history.html", stats=None, error=str(exc)), 503

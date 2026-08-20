@@ -13,6 +13,7 @@ import requests
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS predictions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    model_version TEXT NOT NULL,
     requested_symbol TEXT NOT NULL,
     market_data_symbol TEXT NOT NULL,
     market_session_date TEXT NOT NULL,
@@ -23,6 +24,7 @@ CREATE TABLE IF NOT EXISTS predictions (
     probability_up REAL NOT NULL,
     probability_down REAL NOT NULL,
     technical_probability_up REAL NOT NULL,
+    momentum_direction TEXT CHECK(momentum_direction IN ('UP', 'DOWN')),
     news_sentiment REAL NOT NULL,
     validation_accuracy REAL NOT NULL,
     actual_close REAL,
@@ -119,6 +121,17 @@ class TursoHttpConnection:
 
 def initialize(conn) -> None:
     conn.execute(SCHEMA)
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(predictions)").fetchall()}
+    if "model_version" not in columns:
+        # Preserve pre-versioning rows without mixing them into current metrics.
+        conn.execute(
+            "ALTER TABLE predictions ADD COLUMN model_version TEXT NOT NULL DEFAULT 'legacy'"
+        )
+    if "momentum_direction" not in columns:
+        conn.execute(
+            "ALTER TABLE predictions ADD COLUMN momentum_direction TEXT "
+            "CHECK(momentum_direction IN ('UP', 'DOWN'))"
+        )
     # Older versions keyed by the fallback data symbol, allowing ^XSP and
     # ^GSPC proxy calls for the same requested session to appear twice.
     # Keep native-source rows first, otherwise keep the earliest observation.
@@ -140,31 +153,36 @@ def initialize(conn) -> None:
 
 
 def record_prediction(prediction) -> bool:
-    """Settle yesterday, then preserve the first prediction observed per session."""
+    """Settle yesterday, then save one prediction per completed session."""
     p = asdict(prediction)
+    if not p["market_session_complete"]:
+        return False
     conn = connect()
     try:
         initialize(conn)
-        if p["market_session_complete"]:
-            conn.execute(
-                """UPDATE predictions
-                   SET actual_close = ?,
+        conn.execute(
+            """UPDATE predictions
+                   SET forecast_for = ?,
+                       actual_close = ?,
                        actual_direction = CASE WHEN ? > observed_close THEN 'UP' ELSE 'DOWN' END,
                        settled_at_utc = ?
-                   WHERE market_data_symbol = ? AND forecast_for = ? AND actual_direction IS NULL""",
-                (p["current_price"], p["current_price"], p["generated_at_utc"],
-                 p["market_data_symbol"], p["market_session_date"]),
-            )
+                   WHERE market_data_symbol = ?
+                     AND market_session_date = ?
+                     AND actual_direction IS NULL""",
+            (p["market_session_date"], p["current_price"], p["current_price"],
+             p["generated_at_utc"], p["market_data_symbol"],
+             p["previous_market_session_date"]),
+        )
         cursor = conn.execute(
             """INSERT OR IGNORE INTO predictions (
-                requested_symbol, market_data_symbol, market_session_date, forecast_for,
+                model_version, requested_symbol, market_data_symbol, market_session_date, forecast_for,
                 observed_at_utc, observed_close, predicted_direction, probability_up,
-                probability_down, technical_probability_up, news_sentiment,
+                probability_down, technical_probability_up, momentum_direction, news_sentiment,
                 validation_accuracy
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (p["symbol"], p["market_data_symbol"], p["market_session_date"], p["forecast_for"],
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (p["model_version"], p["symbol"], p["market_data_symbol"], p["market_session_date"], p["forecast_for"],
              p["generated_at_utc"], p["current_price"], p["direction"], p["probability_up"],
-             p["probability_down"], p["technical_probability_up"], p["news_sentiment"],
+             p["probability_down"], p["technical_probability_up"], p["momentum_direction"], p["news_sentiment"],
              p["validation_accuracy"]),
         )
         conn.commit()
@@ -173,7 +191,8 @@ def record_prediction(prediction) -> bool:
         conn.close()
 
 
-def prediction_stats() -> dict[str, Any]:
+def prediction_stats(model_version: str) -> dict[str, Any]:
+    """Return a scorecard containing only predictions from one model version."""
     conn = connect()
     try:
         initialize(conn)
@@ -181,21 +200,39 @@ def prediction_stats() -> dict[str, Any]:
             """SELECT COUNT(*),
                       COALESCE(SUM(CASE WHEN predicted_direction = actual_direction THEN 1 ELSE 0 END), 0),
                       COALESCE(AVG((probability_up - CASE WHEN actual_direction = 'UP' THEN 1.0 ELSE 0.0 END) *
-                                   (probability_up - CASE WHEN actual_direction = 'UP' THEN 1.0 ELSE 0.0 END)), 0)
-               FROM predictions WHERE actual_direction IS NOT NULL"""
+                                   (probability_up - CASE WHEN actual_direction = 'UP' THEN 1.0 ELSE 0.0 END)), 0),
+                      AVG(CASE WHEN actual_direction = 'UP' THEN 1.0 ELSE 0.0 END),
+                      AVG(CASE WHEN momentum_direction IS NULL THEN NULL
+                               WHEN momentum_direction = actual_direction THEN 1.0 ELSE 0.0 END),
+                      AVG(validation_accuracy)
+               FROM predictions WHERE model_version = ? AND actual_direction IS NOT NULL""",
+            (model_version,),
         ).fetchone()
-        pending = conn.execute("SELECT COUNT(*) FROM predictions WHERE actual_direction IS NULL").fetchone()[0]
+        pending = conn.execute(
+            "SELECT COUNT(*) FROM predictions WHERE model_version = ? AND actual_direction IS NULL",
+            (model_version,),
+        ).fetchone()[0]
         recent_rows = conn.execute(
-            """SELECT market_session_date, forecast_for, observed_close, predicted_direction,
+            """SELECT model_version, market_session_date, forecast_for, observed_close, predicted_direction,
                       probability_up, actual_close, actual_direction
-               FROM predictions ORDER BY market_session_date DESC LIMIT 20"""
+               FROM predictions WHERE model_version = ?
+               ORDER BY market_session_date DESC LIMIT 20""",
+            (model_version,),
         ).fetchall()
         settled, correct, brier = int(row[0]), int(row[1]), float(row[2])
         return {
+            "model_version": model_version,
             "settled": settled,
             "correct": correct,
             "accuracy": correct / settled if settled else None,
             "brier": brier if settled else None,
+            "baselines": {
+                "always_up_accuracy": float(row[3]) if row[3] is not None else None,
+                "momentum_accuracy": float(row[4]) if row[4] is not None else None,
+                "fifty_fifty_accuracy": 0.5,
+                "fifty_fifty_brier": 0.25,
+                "walk_forward_accuracy": float(row[5]) if row[5] is not None else None,
+            },
             "pending": int(pending),
             "recent": [enrich_row(values) for values in recent_rows],
             "backend": "Turso" if os.getenv("TURSO_DATABASE_URL") else "local SQLite",
@@ -205,7 +242,7 @@ def prediction_stats() -> dict[str, Any]:
 
 
 def enrich_row(values) -> dict[str, Any]:
-    row = dict(zip(["market_session_date", "forecast_for", "observed_close",
+    row = dict(zip(["model_version", "market_session_date", "forecast_for", "observed_close",
                     "predicted_direction", "probability_up", "actual_close",
                     "actual_direction"], values))
     row["correct"] = (row["predicted_direction"] == row["actual_direction"]

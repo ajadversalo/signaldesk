@@ -4,10 +4,10 @@ We should freeze the experiment before accumulating more history.
 
 ## Game plan
 
-- [ ] Add a `model_version` to every prediction. Otherwise, future improvements get mixed together and the accuracy becomes misleading.
-- [ ] Generate exactly one prediction per completed market session, ideally after 4:15 PM New York time.
-- [ ] Settle each prediction after the following market session closes.
-- [ ] Compare the model against these baselines:
+- [x] Add a `model_version` to every prediction. Otherwise, future improvements get mixed together and the accuracy becomes misleading.
+- [x] Generate exactly one prediction per completed market session, ideally after 4:15 PM New York time.
+- [x] Settle each prediction after the following market session closes.
+- [x] Compare the model against these baselines:
   - Always predict `UP`
   - Previous-day momentum
   - A 50/50 probability forecast

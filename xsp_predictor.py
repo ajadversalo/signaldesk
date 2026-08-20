@@ -30,6 +30,7 @@ from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 
 
 AUX_SYMBOLS = ["SPY", "^VIX", "^VIX3M", "^TNX", "DX-Y.NYB", "ES=F", "RSP", "HYG", "TLT"]
+MODEL_VERSION = "1.0.0"
 FEATURES = [
     "ret_1", "ret_5", "ret_20", "gap", "range", "vol_10", "vol_20",
     "rsi_14", "sma_10_gap", "sma_50_gap", "spy_ret_1", "spy_volume_z20",
@@ -41,8 +42,10 @@ FEATURES = [
 
 @dataclass
 class Prediction:
+    model_version: str
     generated_at_utc: str
     market_session_date: str
+    previous_market_session_date: str
     forecast_for: str
     symbol: str
     market_data_symbol: str
@@ -52,6 +55,7 @@ class Prediction:
     probability_up: float
     probability_down: float
     technical_probability_up: float
+    momentum_direction: str
     news_sentiment: float
     news_weight: float
     headlines_used: int
@@ -61,6 +65,8 @@ class Prediction:
     validation_samples: int
     always_up_accuracy: float
     momentum_accuracy: float
+    fifty_fifty_accuracy: float
+    fifty_fifty_brier_score: float
     active_features: int
     total_features: int
 
@@ -307,6 +313,7 @@ def run(symbol: str, period: str, news_query: str, news_weight: float, validatio
         print(f"Warning: news unavailable ({exc}); using neutral sentiment.")
         stories, sentiment = [], 0.0
     last_day = pd.Timestamp(prices.index[-1])
+    previous_day = pd.Timestamp(prices.index[-2])
     save_news_observation(news_history_csv, last_day, sentiment)
     # Map sentiment from [-1, 1] into a binary up probability.
     news_probs = {
@@ -320,8 +327,11 @@ def run(symbol: str, period: str, news_query: str, news_weight: float, validatio
     direction = max(combined_probs, key=combined_probs.get)
     active_features = int(frame[FEATURES].notna().any().sum())
     result = Prediction(
+        model_version=MODEL_VERSION,
         generated_at_utc=datetime.now(timezone.utc).isoformat(),
-        market_session_date=str(last_day.date()), forecast_for=next_business_day(last_day),
+        market_session_date=str(last_day.date()),
+        previous_market_session_date=str(previous_day.date()),
+        forecast_for=next_business_day(last_day),
         symbol=symbol, market_data_symbol=str(prices.attrs.get("source_symbol", symbol)),
         current_price=round(float(prices["Close"].iloc[-1]), 4),
         market_session_complete=session_is_complete(last_day),
@@ -329,12 +339,16 @@ def run(symbol: str, period: str, news_query: str, news_weight: float, validatio
         probability_up=round(combined_probs["UP"], 4),
         probability_down=round(combined_probs["DOWN"], 4),
         technical_probability_up=round(technical, 4),
+        momentum_direction=(
+            "UP" if float(prices["Close"].iloc[-1]) > float(prices["Close"].iloc[-2]) else "DOWN"
+        ),
         news_sentiment=round(sentiment, 4), news_weight=news_weight,
         headlines_used=len(stories), validation_accuracy=round(metrics["accuracy"], 4),
         validation_balanced_accuracy=round(metrics["balanced_accuracy"], 4),
         validation_brier_score=round(metrics["brier"], 4), validation_samples=metrics["samples"],
         always_up_accuracy=round(metrics["always_up"], 4),
         momentum_accuracy=round(metrics["momentum"], 4),
+        fifty_fifty_accuracy=0.5, fifty_fifty_brier_score=0.25,
         active_features=active_features, total_features=len(FEATURES),
     )
     return result, stories

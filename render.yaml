@@ -17,3 +17,20 @@ services:
         sync: false
       - key: TURSO_AUTH_TOKEN
         sync: false
+  - type: cron
+    name: xsp-daily-prediction
+    runtime: python
+    plan: starter
+    buildCommand: pip install -r requirements.txt
+    startCommand: python scheduled_prediction.py
+    # 21:20 UTC is 4:20 PM EST and 5:20 PM EDT, safely after the NYSE close.
+    schedule: "20 21 * * 1-5"
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.13.7
+      - key: NEWS_HISTORY_CSV
+        value: /tmp/news_history.csv
+      - key: TURSO_DATABASE_URL
+        sync: false
+      - key: TURSO_AUTH_TOKEN
+        sync: false

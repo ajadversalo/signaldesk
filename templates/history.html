@@ -21,18 +21,27 @@
       <div><span>Correct</span><strong>{{ stats.correct }}</strong></div><div><span>Accuracy</span><strong>{{ '%.1f%%'|format(stats.accuracy * 100) if stats.accuracy is not none else '—' }}</strong></div>
       <div><span>Brier score</span><strong>{{ '%.3f'|format(stats.brier) if stats.brier is not none else '—' }}</strong></div>
     </section>
+    <section class="panel metrics-panel"><div class="panel-heading"><div><p class="eyebrow">Baseline comparison</p><h2>Forward benchmark results</h2></div></div>
+      <div class="metric-list">
+        <div><span>Model accuracy</span><strong>{{ '%.1f%%'|format(stats.accuracy * 100) if stats.accuracy is not none else '—' }}</strong></div>
+        <div><span>Always predict UP</span><strong>{{ '%.1f%%'|format(stats.baselines.always_up_accuracy * 100) if stats.baselines.always_up_accuracy is not none else '—' }}</strong></div>
+        <div><span>Previous-day momentum</span><strong>{{ '%.1f%%'|format(stats.baselines.momentum_accuracy * 100) if stats.baselines.momentum_accuracy is not none else '—' }}</strong></div>
+        <div><span>50/50 probability forecast</span><strong>50.0% expected · Brier 0.250</strong></div>
+        <div><span>Model walk-forward backtest</span><strong>{{ '%.1f%%'|format(stats.baselines.walk_forward_accuracy * 100) if stats.baselines.walk_forward_accuracy is not none else '—' }}</strong></div>
+      </div>
+    </section>
     {% if stats.settled == 0 %}<section class="empty-state"><span>01</span><div><h2>The ledger has started.</h2><p>Your first forecast is pending. Return after the next market session closes to see whether it was correct.</p></div></section>{% endif %}
-    <section class="panel ledger-panel"><div class="panel-heading"><div><p class="eyebrow">All observations</p><h2>Forecast ledger</h2></div><span class="sample">{{ stats.backend }}</span></div>
-      <div class="table-wrap"><table class="ledger"><thead><tr><th>Made after</th><th>For session</th><th>Starting close</th><th>Prediction</th><th>Confidence</th><th>Actual close</th><th>Move</th><th>Actual</th><th>Verdict</th></tr></thead><tbody>
+    <section class="panel ledger-panel"><div class="panel-heading"><div><p class="eyebrow">All observations</p><h2>Forecast ledger</h2></div><span class="sample">Model {{ stats.model_version }} · {{ stats.backend }}</span></div>
+      <div class="table-wrap"><table class="ledger"><thead><tr><th>Version</th><th>Made after</th><th>For session</th><th>Starting close</th><th>Prediction</th><th>Confidence</th><th>Actual close</th><th>Move</th><th>Actual</th><th>Verdict</th></tr></thead><tbody>
       {% for row in stats.recent %}<tr>
-        <td>{{ row.market_session_date }}</td><td>{{ row.forecast_for }}</td><td>{{ '%.2f'|format(row.observed_close) }}</td>
+        <td>{{ row.model_version }}</td><td>{{ row.market_session_date }}</td><td>{{ row.forecast_for }}</td><td>{{ '%.2f'|format(row.observed_close) }}</td>
         <td><span class="pill {{ row.predicted_direction|lower }}">{{ row.predicted_direction }}</span></td>
         <td>{{ '%.1f'|format((row.probability_up if row.predicted_direction == 'UP' else 1-row.probability_up) * 100) }}%</td>
         <td>{{ '%.2f'|format(row.actual_close) if row.actual_close is not none else '—' }}</td>
         <td class="{{ 'positive' if row.return_percent is not none and row.return_percent > 0 else 'negative' if row.return_percent is not none else '' }}">{{ '%+.2f%%'|format(row.return_percent) if row.return_percent is not none else '—' }}</td>
         <td>{{ row.actual_direction or 'Pending' }}</td>
         <td>{% if row.correct is none %}<span class="verdict pending">Pending</span>{% elif row.correct %}<span class="verdict correct">Correct</span>{% else %}<span class="verdict wrong">Wrong</span>{% endif %}</td>
-      </tr>{% else %}<tr><td colspan="9">No forecasts saved yet.</td></tr>{% endfor %}
+      </tr>{% else %}<tr><td colspan="10">No forecasts saved for model {{ stats.model_version }} yet.</td></tr>{% endfor %}
       </tbody></table></div>
     </section>
   {% endif %}

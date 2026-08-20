@@ -57,11 +57,12 @@
         <article class="panel metrics-panel">
           <div class="panel-heading"><div><p class="eyebrow">Model health</p><h2>Walk-forward scorecard</h2></div><span class="sample">n={{ prediction.validation_samples }}</span></div>
           <div class="metric-list">
-            <div><span>Model accuracy</span><strong>{{ '%.1f'|format(prediction.validation_accuracy * 100) }}%</strong></div>
+            <div><span>Model walk-forward accuracy</span><strong>{{ '%.1f'|format(prediction.validation_accuracy * 100) }}%</strong></div>
             <div><span>Balanced accuracy</span><strong>{{ '%.1f'|format(prediction.validation_balanced_accuracy * 100) }}%</strong></div>
             <div><span>Always-up baseline</span><strong>{{ '%.1f'|format(prediction.always_up_accuracy * 100) }}%</strong></div>
             <div><span>Momentum baseline</span><strong>{{ '%.1f'|format(prediction.momentum_accuracy * 100) }}%</strong></div>
-            <div><span>Brier score <i>lower is better</i></span><strong>{{ '%.3f'|format(prediction.validation_brier_score) }}</strong></div>
+            <div><span>50/50 baseline</span><strong>{{ '%.1f'|format(prediction.fifty_fifty_accuracy * 100) }}% · Brier {{ '%.3f'|format(prediction.fifty_fifty_brier_score) }}</strong></div>
+            <div><span>Model Brier score <i>lower is better</i></span><strong>{{ '%.3f'|format(prediction.validation_brier_score) }}</strong></div>
           </div>
         </article>
 
@@ -81,7 +82,7 @@
       <section class="panel history-panel">
         <div class="panel-heading">
           <div><p class="eyebrow">Forward record</p><h2>Saved prediction statistics</h2></div>
-          {% if stats %}<span class="sample">{{ stats.backend }} · {{ stats.pending }} pending</span>{% endif %}
+          {% if stats %}<span class="sample">Model {{ stats.model_version }} · {{ stats.backend }} · {{ stats.pending }} pending</span>{% endif %}
         </div>
         {% if storage_error %}
           <div class="storage-error">Persistence unavailable: {{ storage_error }}</div>
@@ -91,6 +92,11 @@
             <div><span>Correct calls</span><strong>{{ stats.correct }}</strong></div>
             <div><span>Live accuracy</span><strong>{{ '%.1f%%'|format(stats.accuracy * 100) if stats.accuracy is not none else '—' }}</strong></div>
             <div><span>Live Brier score</span><strong>{{ '%.3f'|format(stats.brier) if stats.brier is not none else '—' }}</strong></div>
+          </div>
+          <div class="metric-list">
+            <div><span>Always-up forward accuracy</span><strong>{{ '%.1f%%'|format(stats.baselines.always_up_accuracy * 100) if stats.baselines.always_up_accuracy is not none else '—' }}</strong></div>
+            <div><span>Momentum forward accuracy</span><strong>{{ '%.1f%%'|format(stats.baselines.momentum_accuracy * 100) if stats.baselines.momentum_accuracy is not none else '—' }}</strong></div>
+            <div><span>50/50 reference</span><strong>50.0% expected · Brier 0.250</strong></div>
           </div>
           <div class="table-wrap">
             <table>
