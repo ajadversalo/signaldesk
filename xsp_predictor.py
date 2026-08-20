@@ -15,6 +15,7 @@ import urllib.parse
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+from statistics import NormalDist
 from zoneinfo import ZoneInfo
 
 import feedparser
@@ -50,6 +51,7 @@ class Prediction:
     symbol: str
     market_data_symbol: str
     current_price: float
+    next_session_volatility: float
     market_session_complete: bool
     direction: str
     probability_up: float
@@ -284,6 +286,60 @@ def session_is_complete(day: pd.Timestamp) -> bool:
     )
 
 
+def analyze_short_put(prediction: Prediction, strike: float, premium: float) -> dict[str, float]:
+    """Estimate one-session XSP put outcomes from the existing directional signal."""
+    if strike <= 0:
+        raise ValueError("Strike must be greater than zero.")
+    if premium < 0:
+        raise ValueError("Premium cannot be negative.")
+    if premium >= strike:
+        raise ValueError("Premium must be less than the strike.")
+
+    if prediction.market_data_symbol == "^XSP":
+        spot = prediction.current_price
+    elif prediction.market_data_symbol == "^GSPC":
+        spot = prediction.current_price / 10
+    else:
+        raise ValueError(
+            "Short-put estimates require ^XSP or ^GSPC market data; the current fallback is "
+            f"{prediction.market_data_symbol}."
+        )
+    sigma = max(prediction.next_session_volatility, 1e-6)
+    probability_up = min(max(prediction.probability_up, 1e-6), 1 - 1e-6)
+    normal = NormalDist()
+    # Choose the mean of a one-session normal return distribution so its
+    # probability of an up close matches the existing model signal.
+    mean_return = sigma * normal.inv_cdf(probability_up)
+
+    def probability_below(level: float) -> float:
+        threshold_return = level / spot - 1
+        return normal.cdf((threshold_return - mean_return) / sigma)
+
+    breakeven = strike - premium
+    strike_z = ((strike / spot - 1) - mean_return) / sigma
+    probability_itm = normal.cdf(strike_z)
+    density = math.exp(-0.5 * strike_z * strike_z) / math.sqrt(2 * math.pi)
+    expected_intrinsic = (
+        (strike - spot * (1 + mean_return)) * probability_itm
+        + spot * sigma * density
+    )
+    expected_pnl = (premium - max(expected_intrinsic, 0.0)) * 100
+
+    return {
+        "spot": round(spot, 4),
+        "strike": round(strike, 4),
+        "premium": round(premium, 4),
+        "breakeven": round(breakeven, 4),
+        "probability_below_strike": round(probability_itm, 4),
+        "probability_below_breakeven": round(probability_below(breakeven), 4),
+        "probability_profitable_at_expiry": round(1 - probability_below(breakeven), 4),
+        "expected_pnl": round(expected_pnl, 2),
+        "maximum_loss": round((strike - premium) * 100, 2),
+        "expected_settlement": round(spot * (1 + mean_return), 4),
+        "one_sigma_low": round(max(0.0, spot * (1 + mean_return - sigma)), 4),
+    }
+
+
 def save_news_observation(path: str | None, day: pd.Timestamp, sentiment: float) -> None:
     if not path:
         return
@@ -334,6 +390,7 @@ def run(symbol: str, period: str, news_query: str, news_weight: float, validatio
         forecast_for=next_business_day(last_day),
         symbol=symbol, market_data_symbol=str(prices.attrs.get("source_symbol", symbol)),
         current_price=round(float(prices["Close"].iloc[-1]), 4),
+        next_session_volatility=round(float(frame["ret_1"].dropna().tail(252).std()), 6),
         market_session_complete=session_is_complete(last_day),
         direction=direction,
         probability_up=round(combined_probs["UP"], 4),

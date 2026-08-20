@@ -10,7 +10,7 @@ from dataclasses import asdict
 from flask import Flask, jsonify, render_template, request
 
 from database import prediction_stats, record_prediction
-from xsp_predictor import MODEL_VERSION, run
+from xsp_predictor import MODEL_VERSION, analyze_short_put, run
 
 
 app = Flask(__name__)
@@ -53,6 +53,16 @@ def index():
             app.logger.exception("Persistence failed")
             saved, stats, storage_error = False, None, str(exc)
         prediction = asdict(result)
+        short_put, short_put_error = None, None
+        strike_value = request.args.get("strike", "")
+        premium_value = request.args.get("premium", "")
+        if strike_value or premium_value:
+            try:
+                if not strike_value or not premium_value:
+                    raise ValueError("Enter both a strike and premium.")
+                short_put = analyze_short_put(result, float(strike_value), float(premium_value))
+            except ValueError as exc:
+                short_put_error = str(exc)
         beats_baseline = prediction["validation_accuracy"] > max(
             prediction["always_up_accuracy"], prediction["momentum_accuracy"],
             prediction["fifty_fifty_accuracy"],
@@ -60,7 +70,9 @@ def index():
         return render_template(
             "index.html", prediction=prediction, stories=stories[:10], cached=cached,
             beats_baseline=beats_baseline, error=None, stats=stats, saved=saved,
-            storage_error=storage_error,
+            storage_error=storage_error, short_put=short_put,
+            short_put_error=short_put_error, strike_value=strike_value,
+            premium_value=premium_value,
         )
     except Exception as exc:
         app.logger.exception("Prediction failed")
@@ -73,8 +85,16 @@ def prediction_api():
     try:
         result, stories, cached = get_prediction(force=request.args.get("refresh") == "1")
         record_prediction(result)
+        short_put = None
+        if request.args.get("strike") is not None or request.args.get("premium") is not None:
+            if request.args.get("strike") is None or request.args.get("premium") is None:
+                raise ValueError("Provide both strike and premium.")
+            short_put = analyze_short_put(
+                result, float(request.args["strike"]), float(request.args["premium"])
+            )
         return jsonify({"prediction": asdict(result), "headlines": stories,
-                        "stats": prediction_stats(result.model_version), "cached": cached})
+                        "stats": prediction_stats(result.model_version),
+                        "short_put": short_put, "cached": cached})
     except Exception as exc:
         return jsonify({"error": str(exc)}), 503
 

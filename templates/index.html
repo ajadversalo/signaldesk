@@ -53,6 +53,32 @@
         </div>
       </section>
 
+      <section class="panel put-panel">
+        <div class="panel-heading"><div><p class="eyebrow">Optional trade lens</p><h2>One-session short put estimate</h2></div><span class="sample">XSP · $100 multiplier</span></div>
+        <form class="put-form" method="get">
+          <label>Strike<input name="strike" type="number" min="0.01" step="0.01" inputmode="decimal" value="{{ strike_value }}" placeholder="e.g. 675.00" required></label>
+          <label>Premium received<input name="premium" type="number" min="0" step="0.01" inputmode="decimal" value="{{ premium_value }}" placeholder="e.g. 1.25" required></label>
+          <button class="button" type="submit">Estimate put</button>
+        </form>
+        {% if short_put_error %}<div class="storage-error">{{ short_put_error }}</div>{% endif %}
+        {% if short_put %}
+          <div class="stats-strip put-stats">
+            <div><span>Below strike</span><strong>{{ '%.1f'|format(short_put.probability_below_strike * 100) }}%</strong></div>
+            <div><span>Below breakeven</span><strong>{{ '%.1f'|format(short_put.probability_below_breakeven * 100) }}%</strong></div>
+            <div><span>Profitable at expiry</span><strong>{{ '%.1f'|format(short_put.probability_profitable_at_expiry * 100) }}%</strong></div>
+            <div><span>Estimated P/L</span><strong class="{{ 'positive' if short_put.expected_pnl >= 0 else 'negative' }}">{{ '${:,.2f}'.format(short_put.expected_pnl) }}</strong></div>
+          </div>
+          <div class="metric-list">
+            <div><span>Current XSP / strike</span><strong>{{ '%.2f'|format(short_put.spot) }} / {{ '%.2f'|format(short_put.strike) }}</strong></div>
+            <div><span>Expiration breakeven</span><strong>{{ '%.2f'|format(short_put.breakeven) }}</strong></div>
+            <div><span>Model-implied settlement</span><strong>{{ '%.2f'|format(short_put.expected_settlement) }}</strong></div>
+            <div><span>One-sigma low estimate</span><strong>{{ '%.2f'|format(short_put.one_sigma_low) }}</strong></div>
+            <div><span>Maximum expiration loss</span><strong>${{ '{:,.2f}'.format(short_put.maximum_loss) }}</strong></div>
+          </div>
+        {% endif %}
+        <p class="put-note">Approximation from the existing directional probability and recent 252-session volatility. It does not use option-implied volatility, bid/ask spreads, fees, or intraday barrier risk. Research only—not investment advice.</p>
+      </section>
+
       <section class="grid">
         <article class="panel metrics-panel">
           <div class="panel-heading"><div><p class="eyebrow">Model health</p><h2>Walk-forward scorecard</h2></div><span class="sample">n={{ prediction.validation_samples }}</span></div>
