@@ -1,0 +1,9 @@
+pandas>=2.2,<3
+numpy>=1.26,<3
+scikit-learn>=1.4,<2
+yfinance>=0.2.54,<1
+feedparser>=6.0,<7
+vaderSentiment>=3.3,<4
+Flask>=3.1,<4
+gunicorn>=23,<24
+libsql>=0.1.11,<1

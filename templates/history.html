@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Prediction History · XSP Signal Desk</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body><div class="noise"></div><main class="shell">
+  <header class="topbar">
+    <a class="brand" href="/"><span class="brand-mark">X</span><span>XSP <em>Signal Desk</em></span></a>
+    <nav><a href="/">Current signal</a><div class="market-status"><span></span> Forward record</div></nav>
+  </header>
+  <section class="history-hero"><p class="eyebrow">Accountability ledger</p><h1>Prediction history.</h1><p class="lede">Every call is frozen when first observed, then scored against the following session's close.</p></section>
+  {% if error %}
+    <section class="error-panel"><p class="eyebrow">Data unavailable</p><h2>History could not be loaded.</h2><p>{{ error }}</p><a class="button" href="/history">Try again</a></section>
+  {% else %}
+    <section class="stats-strip history-stats">
+      <div><span>Total forecasts</span><strong>{{ stats.settled + stats.pending }}</strong></div><div><span>Settled</span><strong>{{ stats.settled }}</strong></div>
+      <div><span>Correct</span><strong>{{ stats.correct }}</strong></div><div><span>Accuracy</span><strong>{{ '%.1f%%'|format(stats.accuracy * 100) if stats.accuracy is not none else '—' }}</strong></div>
+      <div><span>Brier score</span><strong>{{ '%.3f'|format(stats.brier) if stats.brier is not none else '—' }}</strong></div>
+    </section>
+    {% if stats.settled == 0 %}<section class="empty-state"><span>01</span><div><h2>The ledger has started.</h2><p>Your first forecast is pending. Return after the next market session closes to see whether it was correct.</p></div></section>{% endif %}
+    <section class="panel ledger-panel"><div class="panel-heading"><div><p class="eyebrow">All observations</p><h2>Forecast ledger</h2></div><span class="sample">{{ stats.backend }}</span></div>
+      <div class="table-wrap"><table class="ledger"><thead><tr><th>Made after</th><th>For session</th><th>Starting close</th><th>Prediction</th><th>Confidence</th><th>Actual close</th><th>Move</th><th>Actual</th><th>Verdict</th></tr></thead><tbody>
+      {% for row in stats.recent %}<tr>
+        <td>{{ row.market_session_date }}</td><td>{{ row.forecast_for }}</td><td>{{ '%.2f'|format(row.observed_close) }}</td>
+        <td><span class="pill {{ row.predicted_direction|lower }}">{{ row.predicted_direction }}</span></td>
+        <td>{{ '%.1f'|format((row.probability_up if row.predicted_direction == 'UP' else 1-row.probability_up) * 100) }}%</td>
+        <td>{{ '%.2f'|format(row.actual_close) if row.actual_close is not none else '—' }}</td>
+        <td class="{{ 'positive' if row.return_percent is not none and row.return_percent > 0 else 'negative' if row.return_percent is not none else '' }}">{{ '%+.2f%%'|format(row.return_percent) if row.return_percent is not none else '—' }}</td>
+        <td>{{ row.actual_direction or 'Pending' }}</td>
+        <td>{% if row.correct is none %}<span class="verdict pending">Pending</span>{% elif row.correct %}<span class="verdict correct">Correct</span>{% else %}<span class="verdict wrong">Wrong</span>{% endif %}</td>
+      </tr>{% else %}<tr><td colspan="9">No forecasts saved yet.</td></tr>{% endfor %}
+      </tbody></table></div>
+    </section>
+  {% endif %}
+  <footer><span>Results use close-to-close direction.</span><a href="/api/stats">JSON statistics</a></footer>
+</main></body></html>

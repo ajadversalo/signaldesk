@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: xsp-signal-desk
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app --workers 1 --threads 4 --timeout 180
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.13.7
+      - key: PREDICTION_CACHE_SECONDS
+        value: 900
+      - key: NEWS_HISTORY_CSV
+        value: /tmp/news_history.csv
+      - key: TURSO_DATABASE_URL
+        sync: false
+      - key: TURSO_AUTH_TOKEN
+        sync: false
