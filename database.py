@@ -7,6 +7,8 @@ import sqlite3
 from dataclasses import asdict
 from typing import Any
 
+import requests
+
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS predictions (
@@ -35,11 +37,84 @@ def connect():
     url = os.getenv("TURSO_DATABASE_URL")
     token = os.getenv("TURSO_AUTH_TOKEN")
     if url and token:
-        import libsql
-        return libsql.connect(database=url, auth_token=token)
+        return TursoHttpConnection(url, token)
     path = os.getenv("LOCAL_DATABASE_PATH", "data/predictions.db")
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
     return sqlite3.connect(path, timeout=15)
+
+
+class TursoHttpCursor:
+    def __init__(self, rows: list[tuple], rowcount: int = 0):
+        self._rows = rows
+        self.rowcount = rowcount
+
+    def fetchone(self):
+        return self._rows[0] if self._rows else None
+
+    def fetchall(self):
+        return self._rows
+
+
+class TursoHttpConnection:
+    """Minimal sqlite-compatible adapter over Turso's stateless HTTP API."""
+
+    def __init__(self, url: str, token: str):
+        base = url.strip().rstrip("/")
+        if base.startswith("libsql://"):
+            base = "https://" + base[len("libsql://"):]
+        self.endpoint = base + "/v2/pipeline"
+        self.token = token.strip()
+
+    @staticmethod
+    def _encode(value):
+        if value is None:
+            return {"type": "null"}
+        if isinstance(value, bool):
+            return {"type": "integer", "value": "1" if value else "0"}
+        if isinstance(value, int):
+            return {"type": "integer", "value": str(value)}
+        if isinstance(value, float):
+            return {"type": "float", "value": value}
+        return {"type": "text", "value": str(value)}
+
+    @staticmethod
+    def _decode(value):
+        kind = value.get("type")
+        raw = value.get("value")
+        if kind == "null":
+            return None
+        if kind == "integer":
+            return int(raw)
+        if kind == "float":
+            return float(raw)
+        return raw
+
+    def execute(self, sql: str, params=()):
+        payload = {"requests": [{"type": "execute", "stmt": {
+            "sql": sql, "args": [self._encode(value) for value in params],
+            "named_args": [], "want_rows": True,
+        }}]}
+        response = requests.post(
+            self.endpoint,
+            headers={"Authorization": f"Bearer {self.token}", "Content-Type": "application/json"},
+            json=payload, timeout=30,
+        )
+        response.raise_for_status()
+        body = response.json()
+        item = body.get("results", [{}])[0]
+        if item.get("type") == "error":
+            error = item.get("error", {})
+            raise RuntimeError(f"Turso query failed: {error.get('message', error)}")
+        result = item.get("response", {}).get("result", {})
+        rows = [tuple(self._decode(value) for value in row) for row in result.get("rows", [])]
+        return TursoHttpCursor(rows, int(result.get("affected_row_count", 0)))
+
+    def commit(self):
+        # Each stateless HTTP execute is committed atomically by Turso.
+        return None
+
+    def close(self):
+        return None
 
 
 def initialize(conn) -> None:

@@ -6,4 +6,4 @@ feedparser>=6.0,<7
 vaderSentiment>=3.3,<4
 Flask>=3.1,<4
 gunicorn>=23,<24
-libsql>=0.1.11,<1
+requests>=2.31,<3
