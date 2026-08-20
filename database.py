@@ -119,6 +119,22 @@ class TursoHttpConnection:
 
 def initialize(conn) -> None:
     conn.execute(SCHEMA)
+    # Older versions keyed by the fallback data symbol, allowing ^XSP and
+    # ^GSPC proxy calls for the same requested session to appear twice.
+    # Keep native-source rows first, otherwise keep the earliest observation.
+    conn.execute(
+        """DELETE FROM predictions WHERE id IN (
+               SELECT id FROM (
+                   SELECT id,
+                          ROW_NUMBER() OVER (
+                              PARTITION BY requested_symbol, market_session_date
+                              ORDER BY CASE WHEN market_data_symbol = requested_symbol THEN 0 ELSE 1 END, id
+                          ) AS duplicate_number
+                   FROM predictions
+               ) WHERE duplicate_number > 1
+           )"""
+    )
+    conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_predictions_session ON predictions(requested_symbol, market_session_date)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_predictions_forecast ON predictions(market_data_symbol, forecast_for)")
     conn.commit()
 
