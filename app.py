@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import csv
 import os
+import subprocess
+import sys
 import threading
 import time
 from dataclasses import asdict
@@ -20,10 +22,37 @@ _cache: dict[str, object] = {}
 _lock = threading.Lock()
 CACHE_SECONDS = int(os.getenv("PREDICTION_CACHE_SECONDS", "900"))
 CSP_RESULTS_FILE = Path(__file__).parent / "legacy" / "csp_candidates_v4.csv"
+CSP_SCRIPT_FILE = Path(__file__).parent / "legacy" / "v4.py"
+CSP_CACHE_SECONDS = int(os.getenv("CSP_CACHE_SECONDS", "900"))
+CSP_TIMEOUT_SECONDS = int(os.getenv("CSP_TIMEOUT_SECONDS", "600"))
+_csp_lock = threading.Lock()
+
+
+def run_csp_screener(force: bool = False) -> None:
+    """Generate V4 results when the saved market scan is missing or stale."""
+    with _csp_lock:
+        if CSP_RESULTS_FILE.exists():
+            age = time.time() - CSP_RESULTS_FILE.stat().st_mtime
+            if not force and age < CSP_CACHE_SECONDS:
+                return
+
+        completed = subprocess.run(
+            [sys.executable, str(CSP_SCRIPT_FILE)],
+            cwd=CSP_SCRIPT_FILE.parent,
+            capture_output=True,
+            text=True,
+            timeout=CSP_TIMEOUT_SECONDS,
+            check=False,
+        )
+        if completed.returncode != 0:
+            detail = completed.stderr.strip() or completed.stdout.strip()
+            raise RuntimeError(
+                f"CSP V4 scan failed with exit code {completed.returncode}: {detail}"
+            )
 
 
 def get_csp_results() -> tuple[list[dict[str, object]], str | None]:
-    """Load the latest V4 screener output without rerunning the market scan."""
+    """Load the latest saved V4 screener output."""
     if not CSP_RESULTS_FILE.exists():
         return [], None
     numeric_fields = {
@@ -155,6 +184,7 @@ def history():
 @app.get("/csp")
 def csp_screener():
     try:
+        run_csp_screener(force=request.args.get("refresh") == "1")
         rows, generated = get_csp_results()
         return render_template("csp.html", rows=rows, generated=generated, error=None)
     except Exception as exc:

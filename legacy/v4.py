@@ -268,6 +268,10 @@ def main() -> None:
     render_report(frame, {"quote_source": ", ".join(quote_sources)})
     if rejections:
         pd.DataFrame(rejections).to_csv(REJECTIONS_FILE, index=False, encoding="utf-8")
+    # Always replace the combined output, including after a valid scan with no
+    # candidates. This prevents the dashboard from showing stale contracts and
+    # gives its cache a timestamp for the completed empty scan.
+    frame.to_csv(OUTPUT_FILE, index=False, encoding="utf-8")
     if frame.empty:
         counts = Counter(item.get("reason", "unknown") for item in rejections)
         print("\nNo contracts passed all v3 risk and liquidity filters.")
@@ -276,7 +280,6 @@ def main() -> None:
         print(f"Empty-state report saved to {REPORT_FILE}")
         return
 
-    frame.to_csv(OUTPUT_FILE, index=False, encoding="utf-8")
     v2_frame = pd.DataFrame(v2_candidates)
     if not v2_frame.empty:
         v2_frame = v2_frame.sort_values("v2_score", ascending=False)
