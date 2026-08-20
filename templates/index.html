@@ -108,7 +108,7 @@
       <section class="panel history-panel">
         <div class="panel-heading">
           <div><p class="eyebrow">Forward record</p><h2>Saved prediction statistics</h2></div>
-          {% if stats %}<span class="sample">Model {{ stats.model_version }} · {{ stats.backend }} · {{ stats.pending }} pending</span>{% endif %}
+          {% if stats %}<span class="sample">Model {{ stats.model_version }} stats · all-version ledger · {{ stats.backend }}</span>{% endif %}
         </div>
         {% if storage_error %}
           <div class="storage-error">Persistence unavailable: {{ storage_error }}</div>
@@ -126,18 +126,18 @@
           </div>
           <div class="table-wrap">
             <table>
-              <thead><tr><th>Observed</th><th>Forecast for</th><th>Close</th><th>Call</th><th>P(up)</th><th>Actual</th><th>Result</th></tr></thead>
+              <thead><tr><th>Version</th><th>Observed</th><th>Forecast for</th><th>Close</th><th>Call</th><th>P(up)</th><th>Actual</th><th>Result</th></tr></thead>
               <tbody>
                 {% for row in stats.recent %}
                 <tr>
-                  <td>{{ row.market_session_date }}</td><td>{{ row.forecast_for }}</td>
+                  <td>{{ row.model_version }}</td><td>{{ row.market_session_date }}</td><td>{{ row.forecast_for }}</td>
                   <td>{{ '%.2f'|format(row.observed_close) }}</td>
                   <td><span class="pill {{ row.predicted_direction|lower }}">{{ row.predicted_direction }}</span></td>
                   <td>{{ '%.1f'|format(row.probability_up * 100) }}%</td>
                   <td>{{ row.actual_direction or 'Pending' }}</td>
                   <td>{% if row.actual_direction %}{{ '✓' if row.actual_direction == row.predicted_direction else '×' }}{% else %}—{% endif %}</td>
                 </tr>
-                {% else %}<tr><td colspan="7">The first prediction will appear here after this visit.</td></tr>{% endfor %}
+                {% else %}<tr><td colspan="8">The first prediction will appear here after this visit.</td></tr>{% endfor %}
               </tbody>
             </table>
           </div>

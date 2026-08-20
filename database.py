@@ -212,12 +212,14 @@ def prediction_stats(model_version: str) -> dict[str, Any]:
             "SELECT COUNT(*) FROM predictions WHERE model_version = ? AND actual_direction IS NULL",
             (model_version,),
         ).fetchone()[0]
+        # The scorecard is version-specific, but the accountability ledger must
+        # survive model upgrades. Otherwise the prediction made before a version
+        # bump disappears just when its next-session result becomes available.
         recent_rows = conn.execute(
             """SELECT model_version, market_session_date, forecast_for, observed_close, predicted_direction,
                       probability_up, actual_close, actual_direction
-               FROM predictions WHERE model_version = ?
+               FROM predictions
                ORDER BY market_session_date DESC LIMIT 20""",
-            (model_version,),
         ).fetchall()
         settled, correct, brier = int(row[0]), int(row[1]), float(row[2])
         return {

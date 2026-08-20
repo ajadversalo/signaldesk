@@ -30,8 +30,8 @@
         <div><span>Model walk-forward backtest</span><strong>{{ '%.1f%%'|format(stats.baselines.walk_forward_accuracy * 100) if stats.baselines.walk_forward_accuracy is not none else '—' }}</strong></div>
       </div>
     </section>
-    {% if stats.settled == 0 %}<section class="empty-state"><span>01</span><div><h2>The ledger has started.</h2><p>Your first forecast is pending. Return after the next market session closes to see whether it was correct.</p></div></section>{% endif %}
-    <section class="panel ledger-panel"><div class="panel-heading"><div><p class="eyebrow">All observations</p><h2>Forecast ledger</h2></div><span class="sample">Model {{ stats.model_version }} · {{ stats.backend }}</span></div>
+    {% if not stats.recent %}<section class="empty-state"><span>01</span><div><h2>The ledger has started.</h2><p>Your first forecast is pending. Return after the next market session closes to see whether it was correct.</p></div></section>{% endif %}
+    <section class="panel ledger-panel"><div class="panel-heading"><div><p class="eyebrow">All observations</p><h2>Forecast ledger</h2></div><span class="sample">All model versions · {{ stats.backend }}</span></div>
       <div class="table-wrap"><table class="ledger"><thead><tr><th>Version</th><th>Made after</th><th>For session</th><th>Starting close</th><th>Prediction</th><th>Confidence</th><th>Actual close</th><th>Move</th><th>Actual</th><th>Verdict</th></tr></thead><tbody>
       {% for row in stats.recent %}<tr>
         <td>{{ row.model_version }}</td><td>{{ row.market_session_date }}</td><td>{{ row.forecast_for }}</td><td>{{ '%.2f'|format(row.observed_close) }}</td>
