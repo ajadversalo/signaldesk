@@ -1,5 +1,7 @@
 """Scanner defaults. All percentages use percentage points unless noted."""
 
+SCANNER_VERSION = "1.0.0"
+
 WATCHLIST = [
     "AAPL", "MSFT", "NVDA", "AMD", "META", "AMZN", "GOOGL", "GOOG", "TSLA", "NFLX",
     "PLTR", "SNOW", "SHOP", "RBLX", "SOFI", "ARM", "UBER", "ABNB", "HIMS", "APP",
@@ -26,4 +28,3 @@ REQUIRE_PULLBACK = False
 EARNINGS_BLACKOUT_DAYS = 7
 MINIMUM_SCORE = 15.0
 MAX_RESULTS = 3
-

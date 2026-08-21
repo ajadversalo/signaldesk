@@ -35,7 +35,7 @@ CREATE TABLE IF NOT EXISTS swing_predictions (
 )
 """
 
-MODEL_VERSION = "swing-scanner-1.0"
+MODEL_VERSION = f"swing-scanner-{config.SCANNER_VERSION}"
 
 
 def initialize(conn) -> None:
@@ -89,20 +89,18 @@ def save_predictions(results: list[ScanResult]) -> tuple[int, str | None]:
         conn.close()
 
 
-def prediction_history(limit: int = 100) -> list[dict[str, object]]:
-    """Return the newest saved swing calls for display."""
+def prediction_history(limit: int | None = None) -> list[dict[str, object]]:
+    """Return saved swing calls, with no row cap by default."""
     conn = connect()
     try:
         initialize(conn)
-        rows = conn.execute(
-            """SELECT model_version, symbol, observed_date, forecast_for, observed_at_utc,
-                      observed_price, predicted_direction, rank, score, momentum_pct,
-                      acceleration, relative_volume, actual_price, actual_direction
-                 FROM swing_predictions
-                ORDER BY observed_date DESC, rank ASC, id ASC
-                LIMIT ?""",
-            (limit,),
-        ).fetchall()
+        sql = """SELECT model_version, symbol, observed_date, forecast_for, observed_at_utc,
+                        observed_price, predicted_direction, rank, score, momentum_pct,
+                        acceleration, relative_volume, actual_price, actual_direction
+                   FROM swing_predictions
+                  ORDER BY observed_date DESC, rank ASC, id ASC"""
+        rows = conn.execute(sql + (" LIMIT ?" if limit is not None else ""),
+                            (limit,) if limit is not None else ()).fetchall()
         columns = ["model_version", "symbol", "observed_date", "forecast_for",
                    "observed_at_utc", "observed_price", "predicted_direction", "rank",
                    "score", "momentum_pct", "acceleration", "relative_volume",

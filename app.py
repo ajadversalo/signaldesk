@@ -35,6 +35,8 @@ CSP_SCRIPT_FILE = Path(__file__).parent / "legacy" / "v4.py"
 CSP_CACHE_SECONDS = int(os.getenv("CSP_CACHE_SECONDS", "900"))
 CSP_TIMEOUT_SECONDS = int(os.getenv("CSP_TIMEOUT_SECONDS", "600"))
 _csp_lock = threading.Lock()
+_csp_state: dict[str, object] = {}
+_csp_state_lock = threading.Lock()
 SWING_CACHE_SECONDS = int(os.getenv("SWING_CACHE_SECONDS", "900"))
 SWING_CACHE_FILE = Path(os.getenv("SWING_CACHE_FILE", "data/swing_scan_cache.json"))
 _swing_cache: dict[str, object] = {}
@@ -67,6 +69,27 @@ def run_csp_screener(force: bool = False) -> None:
             raise RuntimeError(
                 f"CSP V4 scan failed with exit code {completed.returncode}: {detail}"
             )
+
+
+def refresh_csp_in_background(force: bool = True) -> bool:
+    with _csp_state_lock:
+        if _csp_state.get("refreshing"):
+            return False
+        _csp_state.update(refreshing=True, error=None)
+
+    def refresh() -> None:
+        try:
+            run_csp_screener(force=force)
+        except Exception as exc:
+            app.logger.exception("Background CSP refresh failed")
+            with _csp_state_lock:
+                _csp_state["error"] = str(exc)
+        finally:
+            with _csp_state_lock:
+                _csp_state["refreshing"] = False
+
+    threading.Thread(target=refresh, name="csp-refresh", daemon=True).start()
+    return True
 
 
 def get_csp_results() -> tuple[list[dict[str, object]], str | None]:
@@ -102,7 +125,8 @@ def _load_swing_cache() -> None:
                             time=float(payload["saved_at"]), generated=payload["generated"],
                             saved=int(payload.get("saved", 0)),
                             forecast_for=payload.get("forecast_for"),
-                            history=payload.get("history", []))
+                            history=payload.get("history", []),
+                            history_loaded=bool(payload.get("history_complete", False)))
     except Exception:
         app.logger.exception("Could not load the saved swing scan")
 
@@ -139,6 +163,8 @@ def refresh_swing_scan_in_background(force: bool = False) -> bool:
             payload = {"rows": rows, "errors": errors, "saved_at": saved_at,
                        "generated": generated, "saved": saved,
                        "forecast_for": forecast_for, "history": history,
+                       "history_loaded": True,
+                       "history_complete": True,
                        "settled": settled}
             SWING_CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
             temporary = SWING_CACHE_FILE.with_suffix(".tmp")
@@ -156,6 +182,30 @@ def refresh_swing_scan_in_background(force: bool = False) -> bool:
                 _swing_cache["refreshing"] = False
 
     threading.Thread(target=refresh, name="swing-scan-refresh", daemon=True).start()
+    return True
+
+
+def refresh_swing_history_in_background() -> bool:
+    """Load saved predictions independently of the slower market scan."""
+    with _swing_lock:
+        if _swing_cache.get("history_refreshing") or _swing_cache.get("history_loaded"):
+            return False
+        _swing_cache["history_refreshing"] = True
+
+    def refresh() -> None:
+        try:
+            history = swing_prediction_history()
+            with _swing_lock:
+                _swing_cache.update(history=history, history_loaded=True, history_error=None)
+        except Exception as exc:
+            app.logger.exception("Background swing history load failed")
+            with _swing_lock:
+                _swing_cache["history_error"] = str(exc)
+        finally:
+            with _swing_lock:
+                _swing_cache["history_refreshing"] = False
+
+    threading.Thread(target=refresh, name="swing-history-refresh", daemon=True).start()
     return True
 
 
@@ -264,17 +314,38 @@ def refresh_stats_in_background(result: Prediction) -> bool:
     return True
 
 
+def refresh_xsp_history_in_background() -> bool:
+    """Load XSP history without generating or recording a prediction."""
+    with _lock:
+        if _cache.get("stats_refreshing") or _cache.get("stats_loaded"):
+            return False
+        _cache["stats_refreshing"] = True
+
+    def refresh() -> None:
+        try:
+            stats = prediction_stats(MODEL_VERSION)
+            with _lock:
+                _cache.update(stats=stats, stats_loaded=True, storage_error=None)
+        except Exception as exc:
+            app.logger.exception("Background XSP history load failed")
+            with _lock:
+                _cache["storage_error"] = str(exc)
+        finally:
+            with _lock:
+                _cache["stats_refreshing"] = False
+
+    threading.Thread(target=refresh, name="xsp-history-refresh", daemon=True).start()
+    return True
+
+
 _load_prediction_cache()
 
 
 @app.get("/")
 def dashboard():
     prediction_cache = cached_prediction()
-    if not prediction_cache or not prediction_cache[2]:
-        refresh_prediction_in_background(force=bool(prediction_cache))
     prediction = asdict(prediction_cache[0]) if prediction_cache else None
-    if prediction_cache:
-        refresh_stats_in_background(prediction_cache[0])
+    refresh_xsp_history_in_background()
 
     try:
         csp_rows, csp_generated = get_csp_results()
@@ -283,10 +354,7 @@ def dashboard():
         csp_rows, csp_generated = [], None
 
     swing_cache = cached_swing_scan()
-    with _swing_lock:
-        swing_error = _swing_cache.get("error")
-    if (not swing_cache and not swing_error) or (swing_cache and not swing_cache[3]):
-        refresh_swing_scan_in_background(force=False)
+    refresh_swing_history_in_background()
     swing_cache = cached_swing_scan()
     swing_rows = swing_cache[0] if swing_cache else []
     swing_candidates = [row for row in swing_rows if row.get("candidate")][:swing_config.MAX_RESULTS]
@@ -294,32 +362,69 @@ def dashboard():
     with _lock:
         stats = _cache.get("stats")
         xsp_refreshing = bool(_cache.get("refreshing"))
+        xsp_history_loading = bool(_cache.get("stats_refreshing"))
     with _swing_lock:
         swing_refreshing = bool(_swing_cache.get("refreshing"))
+        swing_history = list(_swing_cache.get("history", []))
+        swing_history_loading = bool(_swing_cache.get("history_refreshing"))
+    with _csp_state_lock:
+        csp_refreshing = bool(_csp_state.get("refreshing"))
 
     return render_template(
         "dashboard.html", prediction=prediction, stats=stats,
-        xsp_refreshing=xsp_refreshing,
+        xsp_refreshing=xsp_refreshing, xsp_history_loading=xsp_history_loading,
         csp_rows=csp_rows, csp_generated=csp_generated,
         csp_v2=sum(row.get("source_model") == "V2" for row in csp_rows),
         csp_v3=sum(row.get("source_model") == "V3" for row in csp_rows),
+        csp_refreshing=csp_refreshing,
         swing_candidates=swing_candidates,
+        swing_history=swing_history[:6],
         swing_generated=(swing_cache[2] if swing_cache else None),
         swing_refreshing=swing_refreshing,
+        swing_history_loading=swing_history_loading,
         swing_forecast=_swing_cache.get("forecast_for"),
     )
+
+
+def strategy_is_running() -> bool:
+    """Keep memory-heavy strategy jobs from overlapping on small instances."""
+    return bool(_cache.get("refreshing") or _csp_state.get("refreshing") or
+                _swing_cache.get("refreshing"))
+
+
+@app.post("/api/run/xsp")
+def run_xsp_api():
+    if strategy_is_running():
+        return jsonify({"started": False, "error": "Another strategy is already running."}), 409
+    started = refresh_prediction_in_background(force=True)
+    return jsonify({"started": started, "running": True}), 202
+
+
+@app.post("/api/run/csp")
+def run_csp_api():
+    if strategy_is_running():
+        return jsonify({"started": False, "error": "Another strategy is already running."}), 409
+    started = refresh_csp_in_background(force=True)
+    return jsonify({"started": started, "running": True}), 202
+
+
+@app.post("/api/run/swing")
+def run_swing_api():
+    if strategy_is_running():
+        return jsonify({"started": False, "error": "Another strategy is already running."}), 409
+    started = refresh_swing_scan_in_background(force=True)
+    return jsonify({"started": started, "running": True}), 202
 
 
 @app.get("/xsp")
 def xsp_signal():
     try:
-        force = request.args.get("refresh") == "1"
         cached_value = cached_prediction()
-        if force or not cached_value or not cached_value[2]:
-            refresh_prediction_in_background(force=force or bool(cached_value))
+        refresh_xsp_history_in_background()
         if not cached_value:
             return render_template("index.html", prediction=None, stories=[], cached=False,
-                                   refreshing=True, refresh_error=None, error=None)
+                                   refreshing=bool(_cache.get("refreshing")),
+                                   refresh_error=None, error=None)
         result, stories, _fresh = cached_value
         cached = True
         refresh_stats_in_background(result)
@@ -361,8 +466,11 @@ def xsp_signal():
 @app.get("/api/prediction")
 def prediction_api():
     try:
-        result, stories, cached = get_prediction(force=request.args.get("refresh") == "1")
-        record_prediction(result)
+        cached_value = cached_prediction()
+        if not cached_value:
+            return jsonify({"error": "No saved XSP prediction. Run XSP from the dashboard."}), 404
+        result, stories, fresh = cached_value
+        cached = True
         short_put = None
         if request.args.get("strike") is not None or request.args.get("premium") is not None:
             if request.args.get("strike") is None or request.args.get("premium") is None:
@@ -410,9 +518,12 @@ def history():
 @app.get("/csp")
 def csp_screener():
     try:
-        run_csp_screener(force=request.args.get("refresh") == "1")
         rows, generated = get_csp_results()
-        return render_template("csp.html", rows=rows, generated=generated, error=None)
+        with _csp_state_lock:
+            error = _csp_state.get("error")
+            refreshing = bool(_csp_state.get("refreshing"))
+        return render_template("csp.html", rows=rows, generated=generated,
+                               error=error, refreshing=refreshing)
     except Exception as exc:
         app.logger.exception("CSP results failed")
         return render_template("csp.html", rows=[], generated=None, error=str(exc)), 503
@@ -420,26 +531,32 @@ def csp_screener():
 
 @app.get("/swing")
 def swing_screener():
-    force = request.args.get("refresh") == "1"
+    cached = cached_swing_scan()
+    refresh_swing_history_in_background()
     cached = cached_swing_scan()
     with _swing_lock:
-        previous_error = _swing_cache.get("error")
-    if force or (not cached and not previous_error) or (cached and not cached[3]):
-        refresh_swing_scan_in_background(force=force)
-    cached = cached_swing_scan()
-    with _swing_lock:
-        refreshing = bool(_swing_cache.get("refreshing"))
+        refreshing = bool(
+            _swing_cache.get("refreshing") or _swing_cache.get("history_refreshing")
+        )
         error = _swing_cache.get("error")
+        history_refreshing = bool(_swing_cache.get("history_refreshing"))
+        history_error = _swing_cache.get("history_error")
     if not cached:
         return render_template("swing.html", rows=[], errors={}, generated=None,
                                refreshing=refreshing, error=error, saved=0,
-                               forecast_for=None, history=[])
+                               forecast_for=None, history=[],
+                               scanner_version=swing_config.SCANNER_VERSION,
+                               history_refreshing=history_refreshing,
+                               history_error=history_error)
     rows, errors, generated, _fresh = cached
     return render_template("swing.html", rows=rows, errors=errors, generated=generated,
                            refreshing=refreshing, error=error,
                            saved=int(_swing_cache.get("saved", 0)),
                            forecast_for=_swing_cache.get("forecast_for"),
-                           history=_swing_cache.get("history", []))
+                           history=_swing_cache.get("history", []),
+                           scanner_version=swing_config.SCANNER_VERSION,
+                           history_refreshing=history_refreshing,
+                           history_error=history_error)
 
 
 @app.get("/api/swing/status")
@@ -448,14 +565,26 @@ def swing_status():
     with _swing_lock:
         return jsonify({"ready": cached is not None,
                         "fresh": bool(cached and cached[3]),
-                        "refreshing": bool(_swing_cache.get("refreshing")),
+                        "refreshing": bool(
+                            _swing_cache.get("refreshing") or
+                            _swing_cache.get("history_refreshing")
+                        ),
+                        "history_ready": bool(_swing_cache.get("history_loaded")),
+                        "history_refreshing": bool(_swing_cache.get("history_refreshing")),
+                        "history_error": _swing_cache.get("history_error"),
                         "error": _swing_cache.get("error")})
 
 
 @app.get("/methodology")
 def methodology():
     try:
-        result, stories, cached = get_prediction()
+        cached_value = cached_prediction()
+        if not cached_value:
+            return render_template("methodology.html", prediction=None, stories=[],
+                                   cached=False, beats_baseline=False,
+                                   error="No saved XSP prediction. Run XSP from the dashboard."), 404
+        result, stories, _fresh = cached_value
+        cached = True
         prediction = asdict(result)
         beats_baseline = prediction["validation_accuracy"] > max(
             prediction["always_up_accuracy"], prediction["momentum_accuracy"],
