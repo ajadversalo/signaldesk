@@ -20,6 +20,7 @@ from swing_scanner.scanner import download_bars as download_swing_bars
 from swing_scanner.scanner import scan as scan_swing_symbols
 from swing_scanner.persistence import save_predictions as save_swing_predictions
 from swing_scanner.persistence import prediction_history as swing_prediction_history
+from swing_scanner.persistence import pending_prediction_symbols
 from swing_scanner.persistence import settle_predictions as settle_swing_predictions
 from xsp_predictor import MODEL_VERSION, Prediction, analyze_short_put, run
 
@@ -41,6 +42,8 @@ SWING_CACHE_SECONDS = int(os.getenv("SWING_CACHE_SECONDS", "900"))
 SWING_CACHE_FILE = Path(os.getenv("SWING_CACHE_FILE", "data/swing_scan_cache.json"))
 _swing_cache: dict[str, object] = {}
 _swing_lock = threading.Lock()
+_swing_settlement: dict[str, object] = {}
+_swing_settlement_lock = threading.Lock()
 
 
 def run_csp_screener(force: bool = False) -> None:
@@ -212,6 +215,37 @@ def refresh_swing_history_in_background() -> bool:
     return True
 
 
+def settle_swing_in_background() -> bool:
+    """Settle pending calls without running the watchlist strategy."""
+    with _swing_settlement_lock:
+        if _swing_settlement.get("running"):
+            return False
+        _swing_settlement.update(running=True, error=None, settled=0)
+
+    def settle() -> None:
+        try:
+            symbols = pending_prediction_symbols()
+            settled = 0
+            if symbols:
+                bars = download_swing_bars(symbols)
+                settled = settle_swing_predictions(bars)
+            history = swing_prediction_history()
+            with _swing_lock:
+                _swing_cache.update(history=history, history_loaded=True)
+            with _swing_settlement_lock:
+                _swing_settlement["settled"] = settled
+        except Exception as exc:
+            app.logger.exception("Swing result settlement failed")
+            with _swing_settlement_lock:
+                _swing_settlement["error"] = str(exc)
+        finally:
+            with _swing_settlement_lock:
+                _swing_settlement["running"] = False
+
+    threading.Thread(target=settle, name="swing-settlement", daemon=True).start()
+    return True
+
+
 _load_swing_cache()
 
 
@@ -372,6 +406,8 @@ def dashboard():
         swing_history_loading = bool(_swing_cache.get("history_refreshing"))
     with _csp_state_lock:
         csp_refreshing = bool(_csp_state.get("refreshing"))
+    with _swing_settlement_lock:
+        swing_settlement_running = bool(_swing_settlement.get("running"))
 
     return render_template(
         "dashboard.html", prediction=prediction, stats=stats,
@@ -385,6 +421,7 @@ def dashboard():
         swing_generated=(swing_cache[2] if swing_cache else None),
         swing_refreshing=swing_refreshing,
         swing_history_loading=swing_history_loading,
+        swing_settlement_running=swing_settlement_running,
         swing_forecast=_swing_cache.get("forecast_for"),
     )
 
@@ -392,7 +429,7 @@ def dashboard():
 def strategy_is_running() -> bool:
     """Keep memory-heavy strategy jobs from overlapping on small instances."""
     return bool(_cache.get("refreshing") or _csp_state.get("refreshing") or
-                _swing_cache.get("refreshing"))
+                _swing_cache.get("refreshing") or _swing_settlement.get("running"))
 
 
 @app.post("/api/run/xsp")
@@ -416,6 +453,14 @@ def run_swing_api():
     if strategy_is_running():
         return jsonify({"started": False, "error": "Another strategy is already running."}), 409
     started = refresh_swing_scan_in_background(force=True)
+    return jsonify({"started": started, "running": True}), 202
+
+
+@app.post("/api/settle/swing")
+def settle_swing_api():
+    if strategy_is_running():
+        return jsonify({"started": False, "error": "A strategy is already running."}), 409
+    started = settle_swing_in_background()
     return jsonify({"started": started, "running": True}), 202
 
 

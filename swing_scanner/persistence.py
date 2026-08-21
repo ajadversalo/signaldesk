@@ -161,3 +161,17 @@ def settle_predictions(bars_by_symbol: dict[str, pd.DataFrame],
         return settled
     finally:
         conn.close()
+
+
+def pending_prediction_symbols() -> list[str]:
+    """Return distinct symbols whose forecast results have not been settled."""
+    conn = connect()
+    try:
+        initialize(conn)
+        rows = conn.execute(
+            """SELECT DISTINCT symbol FROM swing_predictions
+                WHERE actual_direction IS NULL ORDER BY symbol"""
+        ).fetchall()
+        return [str(row[0]) for row in rows]
+    finally:
+        conn.close()

@@ -5,7 +5,13 @@ from dataclasses import replace
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from swing_scanner.persistence import next_business_day, prediction_history, save_predictions, settle_predictions
+from swing_scanner.persistence import (
+    next_business_day,
+    pending_prediction_symbols,
+    prediction_history,
+    save_predictions,
+    settle_predictions,
+)
 from swing_scanner.strategy import evaluate
 
 
@@ -78,6 +84,7 @@ def test_top_predictions_are_saved_with_price_and_next_session(tmp_path, monkeyp
     assert saved_again == 3
     assert forecast_again == forecast_for
     assert [row["symbol"] for row in unchanged] == ["ONE", "TWO", "THREE"]
+    assert pending_prediction_symbols() == ["ONE", "THREE", "TWO"]
 
     settlement_bars = {
         symbol: pd.DataFrame(
@@ -92,6 +99,7 @@ def test_top_predictions_are_saved_with_price_and_next_session(tmp_path, monkeyp
     assert settled == 3
     assert all(row["actual_price"] == base.close + 2 for row in settled_history)
     assert all(row["actual_direction"] == "UP" for row in settled_history)
+    assert pending_prediction_symbols() == []
 
 
 def test_friday_forecast_settles_on_monday():
