@@ -5,3 +5,5 @@ __pycache__/
 .env
 data/*.db
 data/*.db-*
+data/prediction_cache.json
+data/prediction_cache.tmp

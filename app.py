@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import json
 import os
 import subprocess
 import sys
@@ -14,13 +15,15 @@ from pathlib import Path
 from flask import Flask, jsonify, render_template, request
 
 from database import prediction_stats, record_prediction
-from xsp_predictor import MODEL_VERSION, analyze_short_put, run
+from xsp_predictor import MODEL_VERSION, Prediction, analyze_short_put, run
 
 
 app = Flask(__name__)
 _cache: dict[str, object] = {}
 _lock = threading.Lock()
+_refresh_lock = threading.Lock()
 CACHE_SECONDS = int(os.getenv("PREDICTION_CACHE_SECONDS", "900"))
+PREDICTION_CACHE_FILE = Path(os.getenv("PREDICTION_CACHE_FILE", "data/prediction_cache.json"))
 CSP_RESULTS_FILE = Path(__file__).parent / "legacy" / "csp_candidates_v4.csv"
 CSP_SCRIPT_FILE = Path(__file__).parent / "legacy" / "v4.py"
 CSP_CACHE_SECONDS = int(os.getenv("CSP_CACHE_SECONDS", "900"))
@@ -80,11 +83,43 @@ def get_csp_results() -> tuple[list[dict[str, object]], str | None]:
     return rows, generated
 
 
-def get_prediction(force: bool = False):
-    now = time.time()
+def _load_prediction_cache() -> None:
+    if not PREDICTION_CACHE_FILE.exists():
+        return
+    try:
+        payload = json.loads(PREDICTION_CACHE_FILE.read_text(encoding="utf-8"))
+        _cache.update(result=Prediction(**payload["prediction"]),
+                      stories=payload.get("stories", []), time=float(payload["saved_at"]))
+    except Exception:
+        app.logger.exception("Could not load the saved prediction cache")
+
+
+def _save_prediction_cache(result: Prediction, stories: list[dict[str, str]], saved_at: float) -> None:
+    PREDICTION_CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
+    temporary = PREDICTION_CACHE_FILE.with_suffix(".tmp")
+    temporary.write_text(json.dumps({"prediction": asdict(result), "stories": stories,
+                                     "saved_at": saved_at}), encoding="utf-8")
+    temporary.replace(PREDICTION_CACHE_FILE)
+
+
+def cached_prediction():
+    """Return cached data immediately, including stale data."""
     with _lock:
-        if not force and _cache.get("result") and now - float(_cache.get("time", 0)) < CACHE_SECONDS:
-            return _cache["result"], _cache["stories"], True
+        result = _cache.get("result")
+        if not result:
+            return None
+        age = time.time() - float(_cache.get("time", 0))
+        return result, _cache.get("stories", []), age < CACHE_SECONDS
+
+
+def get_prediction(force: bool = False):
+    cached = cached_prediction()
+    if not force and cached and cached[2]:
+        return cached[0], cached[1], True
+    with _refresh_lock:
+        cached = cached_prediction()
+        if not force and cached and cached[2]:
+            return cached[0], cached[1], True
         result, stories = run(
             symbol=os.getenv("PREDICTION_SYMBOL", "^XSP"),
             period=os.getenv("PREDICTION_PERIOD", "10y"),
@@ -98,21 +133,78 @@ def get_prediction(force: bool = False):
             events_csv=os.getenv("EVENTS_CSV") or None,
             news_history_csv=os.getenv("NEWS_HISTORY_CSV", "data/news_history.csv"),
         )
-        _cache.update(result=result, stories=stories, time=now)
+        now = time.time()
+        with _lock:
+            _cache.update(result=result, stories=stories, time=now, error=None)
+        _save_prediction_cache(result, stories, now)
         return result, stories, False
+
+
+def refresh_prediction_in_background(force: bool = False) -> bool:
+    with _lock:
+        if _cache.get("refreshing"):
+            return False
+        _cache.update(refreshing=True, error=None)
+
+    def refresh() -> None:
+        try:
+            get_prediction(force=force)
+        except Exception as exc:
+            app.logger.exception("Background prediction refresh failed")
+            with _lock:
+                _cache["error"] = str(exc)
+        finally:
+            with _lock:
+                _cache["refreshing"] = False
+
+    threading.Thread(target=refresh, name="prediction-refresh", daemon=True).start()
+    return True
+
+
+def refresh_stats_in_background(result: Prediction) -> bool:
+    with _lock:
+        if _cache.get("stats_refreshing"):
+            return False
+        _cache.update(stats_refreshing=True, storage_error=None)
+
+    def refresh() -> None:
+        try:
+            saved = record_prediction(result)
+            stats = prediction_stats(result.model_version)
+            with _lock:
+                _cache.update(saved=saved, stats=stats)
+        except Exception as exc:
+            app.logger.exception("Background persistence refresh failed")
+            with _lock:
+                _cache["storage_error"] = str(exc)
+        finally:
+            with _lock:
+                _cache["stats_refreshing"] = False
+
+    threading.Thread(target=refresh, name="prediction-stats-refresh", daemon=True).start()
+    return True
+
+
+_load_prediction_cache()
 
 
 @app.get("/")
 def index():
     try:
-        result, stories, cached = get_prediction(force=request.args.get("refresh") == "1")
-        storage_error = None
-        try:
-            saved = record_prediction(result)
-            stats = prediction_stats(result.model_version)
-        except Exception as exc:
-            app.logger.exception("Persistence failed")
-            saved, stats, storage_error = False, None, str(exc)
+        force = request.args.get("refresh") == "1"
+        cached_value = cached_prediction()
+        if force or not cached_value or not cached_value[2]:
+            refresh_prediction_in_background(force=force or bool(cached_value))
+        if not cached_value:
+            return render_template("index.html", prediction=None, stories=[], cached=False,
+                                   refreshing=True, refresh_error=None, error=None)
+        result, stories, _fresh = cached_value
+        cached = True
+        refresh_stats_in_background(result)
+        with _lock:
+            saved = bool(_cache.get("saved"))
+            stats = _cache.get("stats")
+            storage_error = _cache.get("storage_error")
         prediction = asdict(result)
         short_put, short_put_error = None, None
         strike_value = request.args.get("strike", "")
@@ -134,6 +226,7 @@ def index():
             storage_error=storage_error, short_put=short_put,
             short_put_error=short_put_error, strike_value=strike_value,
             premium_value=premium_value,
+            refreshing=bool(_cache.get("refreshing")), refresh_error=_cache.get("error"),
             latest_settled=(next((row for row in stats["recent"] if row["actual_direction"]), None)
                             if stats else None),
         )
@@ -160,6 +253,16 @@ def prediction_api():
                         "short_put": short_put, "cached": cached})
     except Exception as exc:
         return jsonify({"error": str(exc)}), 503
+
+
+@app.get("/api/prediction/status")
+def prediction_status():
+    cached_value = cached_prediction()
+    with _lock:
+        return jsonify({"ready": cached_value is not None,
+                        "fresh": bool(cached_value and cached_value[2]),
+                        "refreshing": bool(_cache.get("refreshing")),
+                        "error": _cache.get("error")})
 
 
 @app.get("/health")
