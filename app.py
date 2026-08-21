@@ -126,7 +126,10 @@ def _load_swing_cache() -> None:
                             saved=int(payload.get("saved", 0)),
                             forecast_for=payload.get("forecast_for"),
                             history=payload.get("history", []),
-                            history_loaded=bool(payload.get("history_complete", False)))
+                            # Turso is authoritative. A scan cache may have been written
+                            # before database history finished loading or under another
+                            # deployment configuration, so verify once per app process.
+                            history_loaded=False)
     except Exception:
         app.logger.exception("Could not load the saved swing scan")
 
@@ -538,7 +541,7 @@ def swing_screener():
         refreshing = bool(
             _swing_cache.get("refreshing") or _swing_cache.get("history_refreshing")
         )
-        error = _swing_cache.get("error")
+        error = _swing_cache.get("error") or _swing_cache.get("history_error")
         history_refreshing = bool(_swing_cache.get("history_refreshing"))
         history_error = _swing_cache.get("history_error")
     if not cached:
