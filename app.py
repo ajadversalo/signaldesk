@@ -12,7 +12,7 @@ import time
 from dataclasses import asdict
 from pathlib import Path
 
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, jsonify, redirect, render_template, request
 
 from database import prediction_stats, record_prediction
 from swing_scanner import config as swing_config
@@ -268,7 +268,50 @@ _load_prediction_cache()
 
 
 @app.get("/")
-def index():
+def dashboard():
+    prediction_cache = cached_prediction()
+    if not prediction_cache or not prediction_cache[2]:
+        refresh_prediction_in_background(force=bool(prediction_cache))
+    prediction = asdict(prediction_cache[0]) if prediction_cache else None
+    if prediction_cache:
+        refresh_stats_in_background(prediction_cache[0])
+
+    try:
+        csp_rows, csp_generated = get_csp_results()
+    except Exception:
+        app.logger.exception("Dashboard CSP summary failed")
+        csp_rows, csp_generated = [], None
+
+    swing_cache = cached_swing_scan()
+    with _swing_lock:
+        swing_error = _swing_cache.get("error")
+    if (not swing_cache and not swing_error) or (swing_cache and not swing_cache[3]):
+        refresh_swing_scan_in_background(force=False)
+    swing_cache = cached_swing_scan()
+    swing_rows = swing_cache[0] if swing_cache else []
+    swing_candidates = [row for row in swing_rows if row.get("candidate")][:swing_config.MAX_RESULTS]
+
+    with _lock:
+        stats = _cache.get("stats")
+        xsp_refreshing = bool(_cache.get("refreshing"))
+    with _swing_lock:
+        swing_refreshing = bool(_swing_cache.get("refreshing"))
+
+    return render_template(
+        "dashboard.html", prediction=prediction, stats=stats,
+        xsp_refreshing=xsp_refreshing,
+        csp_rows=csp_rows, csp_generated=csp_generated,
+        csp_v2=sum(row.get("source_model") == "V2" for row in csp_rows),
+        csp_v3=sum(row.get("source_model") == "V3" for row in csp_rows),
+        swing_candidates=swing_candidates,
+        swing_generated=(swing_cache[2] if swing_cache else None),
+        swing_refreshing=swing_refreshing,
+        swing_forecast=_swing_cache.get("forecast_for"),
+    )
+
+
+@app.get("/xsp")
+def xsp_signal():
     try:
         force = request.args.get("refresh") == "1"
         cached_value = cached_prediction()
@@ -341,6 +384,8 @@ def prediction_status():
         return jsonify({"ready": cached_value is not None,
                         "fresh": bool(cached_value and cached_value[2]),
                         "refreshing": bool(_cache.get("refreshing")),
+                        "stats_ready": _cache.get("stats") is not None,
+                        "stats_refreshing": bool(_cache.get("stats_refreshing")),
                         "error": _cache.get("error")})
 
 
@@ -359,13 +404,7 @@ def stats_api():
 
 @app.get("/history")
 def history():
-    try:
-        result, _, _ = get_prediction()
-        record_prediction(result)
-        return render_template("history.html", stats=prediction_stats(result.model_version), error=None)
-    except Exception as exc:
-        app.logger.exception("History failed")
-        return render_template("history.html", stats=None, error=str(exc)), 503
+    return redirect("/xsp#history", code=302)
 
 
 @app.get("/csp")
