@@ -18,6 +18,8 @@ from database import prediction_stats, record_prediction
 from swing_scanner import config as swing_config
 from swing_scanner.scanner import download_bars as download_swing_bars
 from swing_scanner.scanner import scan as scan_swing_symbols
+from swing_scanner.persistence import save_predictions as save_swing_predictions
+from swing_scanner.persistence import prediction_history as swing_prediction_history
 from xsp_predictor import MODEL_VERSION, Prediction, analyze_short_put, run
 
 
@@ -96,7 +98,10 @@ def _load_swing_cache() -> None:
     try:
         payload = json.loads(SWING_CACHE_FILE.read_text(encoding="utf-8"))
         _swing_cache.update(rows=payload["rows"], errors=payload.get("errors", {}),
-                            time=float(payload["saved_at"]), generated=payload["generated"])
+                            time=float(payload["saved_at"]), generated=payload["generated"],
+                            saved=int(payload.get("saved", 0)),
+                            forecast_for=payload.get("forecast_for"),
+                            history=payload.get("history", []))
     except Exception:
         app.logger.exception("Could not load the saved swing scan")
 
@@ -123,11 +128,14 @@ def refresh_swing_scan_in_background(force: bool = False) -> bool:
     def refresh() -> None:
         try:
             results, errors = scan_swing_symbols(download_swing_bars(swing_config.WATCHLIST))
+            saved, forecast_for = save_swing_predictions(results)
+            history = swing_prediction_history()
             saved_at = time.time()
             generated = time.strftime("%b %d, %Y at %I:%M %p", time.localtime(saved_at))
             rows = [result.to_dict() for result in results]
             payload = {"rows": rows, "errors": errors, "saved_at": saved_at,
-                       "generated": generated}
+                       "generated": generated, "saved": saved,
+                       "forecast_for": forecast_for, "history": history}
             SWING_CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
             temporary = SWING_CACHE_FILE.with_suffix(".tmp")
             temporary.write_text(json.dumps(payload), encoding="utf-8")
@@ -381,10 +389,14 @@ def swing_screener():
         error = _swing_cache.get("error")
     if not cached:
         return render_template("swing.html", rows=[], errors={}, generated=None,
-                               refreshing=refreshing, error=error)
+                               refreshing=refreshing, error=error, saved=0,
+                               forecast_for=None, history=[])
     rows, errors, generated, _fresh = cached
     return render_template("swing.html", rows=rows, errors=errors, generated=generated,
-                           refreshing=refreshing, error=error)
+                           refreshing=refreshing, error=error,
+                           saved=int(_swing_cache.get("saved", 0)),
+                           forecast_for=_swing_cache.get("forecast_for"),
+                           history=_swing_cache.get("history", []))
 
 
 @app.get("/api/swing/status")

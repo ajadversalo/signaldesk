@@ -1,6 +1,9 @@
 import numpy as np
 import pandas as pd
+import sqlite3
+from dataclasses import replace
 
+from swing_scanner.persistence import prediction_history, save_predictions
 from swing_scanner.strategy import evaluate
 
 
@@ -32,3 +35,44 @@ def test_weak_momentum_does_not_pass():
 
     assert not result.minimum_momentum_ok
     assert not result.technical_signal
+
+
+def test_top_predictions_are_saved_with_price_and_next_session(tmp_path, monkeypatch):
+    index = pd.bdate_range("2025-01-01", periods=240)
+    returns = np.full(len(index), 0.001)
+    returns[-22:] = 0.004
+    returns[-1] = 0.01
+    close = pd.Series(100 * np.cumprod(1 + returns), index=index)
+    bars = pd.DataFrame({"close": close, "volume": 1_000_000.0}, index=index)
+    bars.iloc[-1, bars.columns.get_loc("volume")] = 1_100_000
+    base = evaluate("ONE", bars)
+    results = [replace(base, symbol=name, candidate=True, score=100 - rank)
+               for rank, name in enumerate(["ONE", "TWO", "THREE", "FOUR"])]
+    database_path = tmp_path / "predictions.db"
+    monkeypatch.delenv("TURSO_DATABASE_URL", raising=False)
+    monkeypatch.delenv("TURSO_AUTH_TOKEN", raising=False)
+    monkeypatch.setenv("LOCAL_DATABASE_PATH", str(database_path))
+
+    saved, forecast_for = save_predictions(results)
+
+    assert saved == 3
+    assert forecast_for == "2025-12-03"
+    with sqlite3.connect(database_path) as connection:
+        rows = connection.execute(
+            "SELECT symbol, observed_price, predicted_direction, rank, forecast_for "
+            "FROM swing_predictions ORDER BY rank"
+        ).fetchall()
+    assert [row[0] for row in rows] == ["ONE", "TWO", "THREE"]
+    assert all(row[1] == base.close and row[2] == "UP" for row in rows)
+    assert [row[3] for row in rows] == [1, 2, 3]
+    history = prediction_history()
+    assert [row["symbol"] for row in history] == ["ONE", "TWO", "THREE"]
+    assert history[0]["observed_price"] == base.close
+
+    replacements = [replace(base, symbol=name, candidate=True, score=200 - rank)
+                    for rank, name in enumerate(["FIVE", "SIX", "SEVEN"])]
+    saved_again, forecast_again = save_predictions(replacements)
+    unchanged = prediction_history()
+    assert saved_again == 3
+    assert forecast_again == forecast_for
+    assert [row["symbol"] for row in unchanged] == ["ONE", "TWO", "THREE"]
