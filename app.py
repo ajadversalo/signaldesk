@@ -12,7 +12,7 @@ import time
 from dataclasses import asdict
 from pathlib import Path
 
-from flask import Flask, jsonify, redirect, render_template, request
+from flask import Flask, jsonify, redirect, render_template, request, send_from_directory
 
 from database import prediction_stats, record_prediction
 from scan_runs import fail_run, finish_run, latest_runs, start_run
@@ -27,6 +27,17 @@ from xsp_predictor import MODEL_VERSION, Prediction, analyze_short_put, run
 
 
 app = Flask(__name__)
+
+
+@app.get("/service-worker.js")
+def service_worker():
+    """Serve the worker at the root so it can control every page."""
+    response = send_from_directory(app.static_folder, "service-worker.js")
+    response.headers["Cache-Control"] = "no-cache"
+    response.headers["Service-Worker-Allowed"] = "/"
+    return response
+
+
 _cache: dict[str, object] = {}
 _lock = threading.Lock()
 _refresh_lock = threading.Lock()
@@ -651,6 +662,13 @@ def csp_screener():
     except Exception as exc:
         app.logger.exception("CSP results failed")
         return render_template("csp.html", rows=[], generated=None, error=str(exc)), 503
+
+
+@app.get("/api/csp/status")
+def csp_status():
+    with _csp_state_lock:
+        return jsonify({"refreshing": bool(_csp_state.get("refreshing")),
+                        "error": _csp_state.get("error")})
 
 
 @app.get("/swing")

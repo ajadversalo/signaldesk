@@ -1,0 +1,11 @@
+{
+  "name": "Waverider Signal Desk",
+  "short_name": "Signal Desk",
+  "description": "XSP direction, CSP opportunities, and swing momentum signals.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#090d0b",
+  "theme_color": "#090d0b",
+  "icons": [{"src": "/static/app-icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable"}]
+}
