@@ -65,13 +65,14 @@ def run_csp_screener(force: bool = False) -> None:
         if completed.returncode != 0:
             detail = completed.stderr.strip() or completed.stdout.strip()
             if CSP_RESULTS_FILE.exists():
-                app.logger.warning(
-                    "CSP V4 refresh failed; serving stale results: %s", detail
+                raise RuntimeError(
+                    f"CSP V4 refresh failed; previous saved results were preserved: {detail}"
                 )
-                return
             raise RuntimeError(
                 f"CSP V4 scan failed with exit code {completed.returncode}: {detail}"
             )
+        if not CSP_RESULTS_FILE.exists():
+            raise RuntimeError("CSP V4 finished without creating its results file.")
 
 
 def refresh_csp_in_background(force: bool = True) -> bool:
@@ -83,6 +84,12 @@ def refresh_csp_in_background(force: bool = True) -> bool:
     def refresh() -> None:
         try:
             run_csp_screener(force=force)
+            rows, generated = get_csp_results()
+            with _csp_state_lock:
+                _csp_state.update(result_count=len(rows), generated=generated,
+                                  completed=True,
+                                  notice=("Scan completed with no qualifying contracts."
+                                          if not rows else None))
         except Exception as exc:
             app.logger.exception("Background CSP refresh failed")
             with _csp_state_lock:
@@ -406,6 +413,7 @@ def dashboard():
         swing_history_loading = bool(_swing_cache.get("history_refreshing"))
     with _csp_state_lock:
         csp_refreshing = bool(_csp_state.get("refreshing"))
+        csp_error = _csp_state.get("error")
     with _swing_settlement_lock:
         swing_settlement_running = bool(_swing_settlement.get("running"))
 
@@ -415,7 +423,8 @@ def dashboard():
         csp_rows=csp_rows, csp_generated=csp_generated,
         csp_v2=sum(row.get("source_model") == "V2" for row in csp_rows),
         csp_v3=sum(row.get("source_model") == "V3" for row in csp_rows),
-        csp_refreshing=csp_refreshing,
+        csp_refreshing=csp_refreshing, csp_error=csp_error,
+        csp_has_scan=csp_generated is not None,
         swing_candidates=swing_candidates,
         swing_history=swing_history[:6],
         swing_generated=(swing_cache[2] if swing_cache else None),

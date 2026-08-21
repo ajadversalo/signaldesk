@@ -279,9 +279,9 @@ def main() -> None:
         if ib.isConnected():
             ib.disconnect()
 
-    if unavailable_history_count >= len(v3.WATCHLIST) // 2 and OUTPUT_FILE.exists():
+    if unavailable_history_count >= len(v3.WATCHLIST) // 2:
         raise RuntimeError(
-            "Yahoo Finance history unavailable for most symbols; keeping previous V4 output."
+            "Yahoo Finance history unavailable for most symbols; refusing to publish an empty scan."
         )
 
     separate = separate_results(v2_candidates, v3_candidates)
