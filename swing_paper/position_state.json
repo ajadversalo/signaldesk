@@ -1,0 +1,41 @@
+{
+    "ODFL": {
+        "entry_date": "2026-06-11",
+        "entry_price": 0.0,
+        "highest_close": 0.0,
+        "max_momentum": 30.96521831060366,
+        "max_favorable_pct": 0
+    },
+    "GS": {
+        "entry_date": "2026-06-04",
+        "entry_price": 1092.61,
+        "entry_score": 21.199677578856967,
+        "entry_momentum": 16.563716861364462,
+        "entry_acceleration": 3.2726809375868555,
+        "entry_rvol": 1.3632797799056486,
+        "highest_close": 1092.61,
+        "max_momentum": 16.563716861364462,
+        "max_favorable_pct": 0
+    },
+    "KLAC": {
+        "entry_date": "2026-06-11",
+        "entry_price": 0.0,
+        "highest_close": 0.0,
+        "max_momentum": 30.37789911877602,
+        "max_favorable_pct": 0
+    },
+    "AMAT": {
+        "entry_date": "2026-06-11",
+        "entry_price": 0.0,
+        "highest_close": 0.0,
+        "max_momentum": 26.575204415840226,
+        "max_favorable_pct": 0
+    },
+    "ARM": {
+        "entry_date": "2026-06-12",
+        "entry_price": 376.72,
+        "highest_close": 376.72,
+        "max_momentum": 64.79212253829323,
+        "max_favorable_pct": 0
+    }
+}

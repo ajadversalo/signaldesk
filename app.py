@@ -15,6 +15,9 @@ from pathlib import Path
 from flask import Flask, jsonify, render_template, request
 
 from database import prediction_stats, record_prediction
+from swing_scanner import config as swing_config
+from swing_scanner.scanner import download_bars as download_swing_bars
+from swing_scanner.scanner import scan as scan_swing_symbols
 from xsp_predictor import MODEL_VERSION, Prediction, analyze_short_put, run
 
 
@@ -29,6 +32,10 @@ CSP_SCRIPT_FILE = Path(__file__).parent / "legacy" / "v4.py"
 CSP_CACHE_SECONDS = int(os.getenv("CSP_CACHE_SECONDS", "900"))
 CSP_TIMEOUT_SECONDS = int(os.getenv("CSP_TIMEOUT_SECONDS", "600"))
 _csp_lock = threading.Lock()
+SWING_CACHE_SECONDS = int(os.getenv("SWING_CACHE_SECONDS", "900"))
+SWING_CACHE_FILE = Path(os.getenv("SWING_CACHE_FILE", "data/swing_scan_cache.json"))
+_swing_cache: dict[str, object] = {}
+_swing_lock = threading.Lock()
 
 
 def run_csp_screener(force: bool = False) -> None:
@@ -81,6 +88,66 @@ def get_csp_results() -> tuple[list[dict[str, object]], str | None]:
         time.localtime(CSP_RESULTS_FILE.stat().st_mtime),
     )
     return rows, generated
+
+
+def _load_swing_cache() -> None:
+    if not SWING_CACHE_FILE.exists():
+        return
+    try:
+        payload = json.loads(SWING_CACHE_FILE.read_text(encoding="utf-8"))
+        _swing_cache.update(rows=payload["rows"], errors=payload.get("errors", {}),
+                            time=float(payload["saved_at"]), generated=payload["generated"])
+    except Exception:
+        app.logger.exception("Could not load the saved swing scan")
+
+
+def cached_swing_scan():
+    with _swing_lock:
+        rows = _swing_cache.get("rows")
+        if rows is None:
+            return None
+        fresh = time.time() - float(_swing_cache.get("time", 0)) < SWING_CACHE_SECONDS
+        return rows, _swing_cache.get("errors", {}), _swing_cache.get("generated"), fresh
+
+
+def refresh_swing_scan_in_background(force: bool = False) -> bool:
+    with _swing_lock:
+        if _swing_cache.get("refreshing"):
+            return False
+        cached = _swing_cache.get("rows") is not None
+        fresh = time.time() - float(_swing_cache.get("time", 0)) < SWING_CACHE_SECONDS
+        if not force and cached and fresh:
+            return False
+        _swing_cache.update(refreshing=True, error=None)
+
+    def refresh() -> None:
+        try:
+            results, errors = scan_swing_symbols(download_swing_bars(swing_config.WATCHLIST))
+            saved_at = time.time()
+            generated = time.strftime("%b %d, %Y at %I:%M %p", time.localtime(saved_at))
+            rows = [result.to_dict() for result in results]
+            payload = {"rows": rows, "errors": errors, "saved_at": saved_at,
+                       "generated": generated}
+            SWING_CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
+            temporary = SWING_CACHE_FILE.with_suffix(".tmp")
+            temporary.write_text(json.dumps(payload), encoding="utf-8")
+            temporary.replace(SWING_CACHE_FILE)
+            with _swing_lock:
+                _swing_cache.update(payload)
+                _swing_cache["time"] = saved_at
+        except Exception as exc:
+            app.logger.exception("Background swing scan failed")
+            with _swing_lock:
+                _swing_cache["error"] = str(exc)
+        finally:
+            with _swing_lock:
+                _swing_cache["refreshing"] = False
+
+    threading.Thread(target=refresh, name="swing-scan-refresh", daemon=True).start()
+    return True
+
+
+_load_swing_cache()
 
 
 def _load_prediction_cache() -> None:
@@ -298,6 +365,36 @@ def csp_screener():
     except Exception as exc:
         app.logger.exception("CSP results failed")
         return render_template("csp.html", rows=[], generated=None, error=str(exc)), 503
+
+
+@app.get("/swing")
+def swing_screener():
+    force = request.args.get("refresh") == "1"
+    cached = cached_swing_scan()
+    with _swing_lock:
+        previous_error = _swing_cache.get("error")
+    if force or (not cached and not previous_error) or (cached and not cached[3]):
+        refresh_swing_scan_in_background(force=force)
+    cached = cached_swing_scan()
+    with _swing_lock:
+        refreshing = bool(_swing_cache.get("refreshing"))
+        error = _swing_cache.get("error")
+    if not cached:
+        return render_template("swing.html", rows=[], errors={}, generated=None,
+                               refreshing=refreshing, error=error)
+    rows, errors, generated, _fresh = cached
+    return render_template("swing.html", rows=rows, errors=errors, generated=generated,
+                           refreshing=refreshing, error=error)
+
+
+@app.get("/api/swing/status")
+def swing_status():
+    cached = cached_swing_scan()
+    with _swing_lock:
+        return jsonify({"ready": cached is not None,
+                        "fresh": bool(cached and cached[3]),
+                        "refreshing": bool(_swing_cache.get("refreshing")),
+                        "error": _swing_cache.get("error")})
 
 
 @app.get("/methodology")

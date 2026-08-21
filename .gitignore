@@ -7,3 +7,6 @@ data/*.db
 data/*.db-*
 data/prediction_cache.json
 data/prediction_cache.tmp
+data/swing_scan.csv
+data/swing_scan_cache.json
+data/swing_scan_cache.tmp

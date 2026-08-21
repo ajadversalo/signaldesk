@@ -1,0 +1,557 @@
+==================================================
+ACCOUNT STATUS
+==================================================
+
+ARM
+   Qty:          2.0
+   Avg Cost:     $397.49
+   Current:      $424.03
+   Market Value: $848.06
+   Unrealized:   $53.08 (6.68%)
+
+DELL
+   Qty:          2.0
+   Avg Cost:     $447.95
+   Current:      $443.45
+   Market Value: $886.90
+   Unrealized:   $-9.00 (-1.00%)
+
+DDOG
+   Qty:          3.0
+   Avg Cost:     $263.94
+   Current:      $268.38
+   Market Value: $805.14
+   Unrealized:   $13.31 (1.68%)
+
+BB
+   Qty:          107.0
+   Avg Cost:     $9.16
+   Current:      $9.80
+   Market Value: $1048.60
+   Unrealized:   $68.55 (6.99%)
+
+==================================================
+SUMMARY
+==================================================
+Position Value: $3,588.70
+Unrealized PnL: $125.94
+Remaining Cash: $7,397.49
+Total Equity: $10,993.20==================================================
+ACCOUNT STATUS
+==================================================
+
+ARM
+   Qty:          2.0
+   Avg Cost:     $397.49
+   Current:      $423.47
+   Market Value: $846.94
+   Unrealized:   $51.96 (6.54%)
+
+DELL
+   Qty:          2.0
+   Avg Cost:     $447.95
+   Current:      $442.41
+   Market Value: $884.82
+   Unrealized:   $-11.08 (-1.24%)
+
+DDOG
+   Qty:          3.0
+   Avg Cost:     $263.94
+   Current:      $267.43
+   Market Value: $802.29
+   Unrealized:   $10.46 (1.32%)
+
+BB
+   Qty:          107.0
+   Avg Cost:     $9.16
+   Current:      $9.82
+   Market Value: $1050.74
+   Unrealized:   $70.69 (7.21%)
+
+==================================================
+SUMMARY
+==================================================
+Position Value: $3,584.79
+Unrealized PnL: $122.03
+Remaining Cash: $7,397.49
+Total Equity: $10,999.57==================================================
+ACCOUNT STATUS
+==================================================
+
+ARM
+   Qty:          2.0
+   Avg Cost:     $397.49
+   Current:      $423.19
+   Market Value: $846.38
+   Unrealized:   $51.40 (6.47%)
+
+DELL
+   Qty:          2.0
+   Avg Cost:     $447.95
+   Current:      $442.81
+   Market Value: $885.62
+   Unrealized:   $-10.28 (-1.15%)
+
+DDOG
+   Qty:          3.0
+   Avg Cost:     $263.94
+   Current:      $267.69
+   Market Value: $803.07
+   Unrealized:   $11.24 (1.42%)
+
+BB
+   Qty:          107.0
+   Avg Cost:     $9.16
+   Current:      $9.83
+   Market Value: $1051.81
+   Unrealized:   $71.76 (7.32%)
+
+==================================================
+SUMMARY
+==================================================
+Position Value: $3,586.88
+Unrealized PnL: $124.12
+Remaining Cash: $7,397.49
+Total Equity: $11,002.68==================================================
+ACCOUNT STATUS
+==================================================
+
+ARM
+   Qty:          2.0
+   Avg Cost:     $397.49
+   Current:      $423.26
+   Market Value: $846.52
+   Unrealized:   $51.54 (6.48%)
+
+DELL
+   Qty:          2.0
+   Avg Cost:     $447.95
+   Current:      $443.21
+   Market Value: $886.42
+   Unrealized:   $-9.48 (-1.06%)
+
+DDOG
+   Qty:          3.0
+   Avg Cost:     $263.94
+   Current:      $266.61
+   Market Value: $799.83
+   Unrealized:   $8.00 (1.01%)
+
+BB
+   Qty:          107.0
+   Avg Cost:     $9.16
+   Current:      $9.82
+   Market Value: $1050.74
+   Unrealized:   $70.69 (7.21%)
+
+==================================================
+SUMMARY
+==================================================
+Position Value: $3,583.51
+Unrealized PnL: $120.75
+Remaining Cash: $7,397.49
+Total Equity: $11,003.72==================================================
+ACCOUNT STATUS
+==================================================
+
+ARM
+   Qty:          2.0
+   Avg Cost:     $397.49
+   Current:      $423.49
+   Market Value: $846.98
+   Unrealized:   $52.00 (6.54%)
+
+DELL
+   Qty:          2.0
+   Avg Cost:     $447.95
+   Current:      $443.01
+   Market Value: $886.02
+   Unrealized:   $-9.88 (-1.10%)
+
+DDOG
+   Qty:          3.0
+   Avg Cost:     $263.94
+   Current:      $266.55
+   Market Value: $799.65
+   Unrealized:   $7.82 (0.99%)
+
+BB
+   Qty:          107.0
+   Avg Cost:     $9.16
+   Current:      $9.83
+   Market Value: $1051.81
+   Unrealized:   $71.76 (7.32%)
+
+==================================================
+SUMMARY
+==================================================
+Position Value: $3,584.46
+Unrealized PnL: $121.70
+Remaining Cash: $7,397.49
+Total Equity: $11,003.72==================================================
+ACCOUNT STATUS
+==================================================
+
+ARM
+   Qty:          2.0
+   Avg Cost:     $397.49
+   Current:      $422.79
+   Market Value: $845.58
+   Unrealized:   $50.60 (6.36%)
+
+DELL
+   Qty:          2.0
+   Avg Cost:     $447.95
+   Current:      $447.25
+   Market Value: $894.50
+   Unrealized:   $-1.40 (-0.16%)
+
+DDOG
+   Qty:          3.0
+   Avg Cost:     $263.94
+   Current:      $267.88
+   Market Value: $803.64
+   Unrealized:   $11.81 (1.49%)
+
+BB
+   Qty:          107.0
+   Avg Cost:     $9.16
+   Current:      $9.88
+   Market Value: $1057.16
+   Unrealized:   $77.11 (7.87%)
+
+==================================================
+SUMMARY
+==================================================
+Position Value: $3,600.88
+Unrealized PnL: $138.12
+Remaining Cash: $7,397.49
+Total Equity: $10,983.75
+
+==================================================
+
+2026-06-02 09:39:51
+==================================================
+
+==================================================
+ACCOUNT STATUS
+==================================================
+
+ARM
+   Qty:          2.0
+   Avg Cost:     $397.49
+   Current:      $415.77
+   Market Value: $831.54
+   Unrealized:   $36.56 (4.60%)
+
+DELL
+   Qty:          2.0
+   Avg Cost:     $447.95
+   Current:      $446.56
+   Market Value: $893.12
+   Unrealized:   $-2.78 (-0.31%)
+
+DDOG
+   Qty:          3.0
+   Avg Cost:     $263.94
+   Current:      $268.75
+   Market Value: $806.25
+   Unrealized:   $14.42 (1.82%)
+
+BB
+   Qty:          107.0
+   Avg Cost:     $9.16
+   Current:      $9.95
+   Market Value: $1064.65
+   Unrealized:   $84.60 (8.63%)
+
+==================================================
+SUMMARY
+==================================================
+Position Value: $3,595.56
+Unrealized PnL: $132.80
+Remaining Cash: $7,397.49
+Total Equity: $10,971.89
+
+
+
+==================================================
+
+2026-06-02 11:04:09
+==================================================
+
+==================================================
+ACCOUNT STATUS
+==================================================
+
+ARM
+   Qty:          2.0
+   Avg Cost:     $397.49
+   Current:      $407.82
+   Market Value: $815.64
+   Unrealized:   $20.66 (2.60%)
+
+DELL
+   Qty:          2.0
+   Avg Cost:     $447.95
+   Current:      $438.20
+   Market Value: $876.40
+   Unrealized:   $-19.50 (-2.18%)
+
+DDOG
+   Qty:          3.0
+   Avg Cost:     $263.94
+   Current:      $271.51
+   Market Value: $814.53
+   Unrealized:   $22.70 (2.87%)
+
+BB
+   Qty:          107.0
+   Avg Cost:     $9.16
+   Current:      $9.87
+   Market Value: $1056.09
+   Unrealized:   $76.04 (7.76%)
+
+==================================================
+SUMMARY
+==================================================
+Position Value: $3,562.66
+Unrealized PnL: $99.90
+Remaining Cash: $7,397.49
+Total Equity: $10,951.78
+
+
+
+==================================================
+
+2026-06-02 12:09:06
+==================================================
+
+==================================================
+ACCOUNT STATUS
+==================================================
+
+ARM
+   Qty:          2.0
+   Avg Cost:     $397.49
+   Current:      $407.68
+   Market Value: $815.36
+   Unrealized:   $20.38 (2.56%)
+
+DELL
+   Qty:          2.0
+   Avg Cost:     $447.95
+   Current:      $437.22
+   Market Value: $874.44
+   Unrealized:   $-21.46 (-2.40%)
+
+DDOG
+   Qty:          3.0
+   Avg Cost:     $263.94
+   Current:      $268.22
+   Market Value: $804.66
+   Unrealized:   $12.83 (1.62%)
+
+BB
+   Qty:          107.0
+   Avg Cost:     $9.16
+   Current:      $10.19
+   Market Value: $1090.33
+   Unrealized:   $110.28 (11.25%)
+
+==================================================
+SUMMARY
+==================================================
+Position Value: $3,584.79
+Unrealized PnL: $122.03
+Remaining Cash: $7,397.49
+Total Equity: $10,983.38
+
+
+
+==================================================
+
+2026-06-02 14:13:05
+==================================================
+
+==================================================
+ACCOUNT STATUS
+==================================================
+
+ARM
+   Qty:          2.0
+   Avg Cost:     $397.49
+   Current:      $402.71
+   Market Value: $805.42
+   Unrealized:   $10.44 (1.31%)
+
+DELL
+   Qty:          2.0
+   Avg Cost:     $447.95
+   Current:      $435.31
+   Market Value: $870.62
+   Unrealized:   $-25.28 (-2.82%)
+
+DDOG
+   Qty:          3.0
+   Avg Cost:     $263.94
+   Current:      $269.13
+   Market Value: $807.39
+   Unrealized:   $15.56 (1.97%)
+
+BB
+   Qty:          107.0
+   Avg Cost:     $9.16
+   Current:      $10.32
+   Market Value: $1104.24
+   Unrealized:   $124.19 (12.67%)
+
+==================================================
+SUMMARY
+==================================================
+Position Value: $3,587.67
+Unrealized PnL: $124.91
+Remaining Cash: $7,397.49
+Total Equity: $11,026.77
+
+
+
+==================================================
+
+2026-06-02 14:31:44
+==================================================
+
+==================================================
+ACCOUNT STATUS
+==================================================
+
+ARM
+   Qty:          2.0
+   Avg Cost:     $397.49
+   Current:      $402.71
+   Market Value: $805.42
+   Unrealized:   $10.44 (1.31%)
+
+DELL
+   Qty:          2.0
+   Avg Cost:     $447.95
+   Current:      $435.31
+   Market Value: $870.62
+   Unrealized:   $-25.28 (-2.82%)
+
+DDOG
+   Qty:          3.0
+   Avg Cost:     $263.94
+   Current:      $269.13
+   Market Value: $807.39
+   Unrealized:   $15.56 (1.97%)
+
+BB
+   Qty:          107.0
+   Avg Cost:     $9.16
+   Current:      $10.32
+   Market Value: $1104.24
+   Unrealized:   $124.19 (12.67%)
+
+==================================================
+SUMMARY
+==================================================
+Position Value: $3,587.67
+Unrealized PnL: $124.91
+Remaining Cash: $7,397.49
+Total Equity: $11,078.53
+
+
+
+==================================================
+
+2026-06-02 20:14:34
+==================================================
+
+==================================================
+ACCOUNT STATUS
+==================================================
+
+ARM
+   Qty:          2.0
+   Avg Cost:     $397.49
+   Current:      $402.71
+   Market Value: $805.42
+   Unrealized:   $10.44 (1.31%)
+
+DELL
+   Qty:          2.0
+   Avg Cost:     $447.95
+   Current:      $435.31
+   Market Value: $870.62
+   Unrealized:   $-25.28 (-2.82%)
+
+DDOG
+   Qty:          3.0
+   Avg Cost:     $263.94
+   Current:      $269.13
+   Market Value: $807.39
+   Unrealized:   $15.56 (1.97%)
+
+BB
+   Qty:          107.0
+   Avg Cost:     $9.16
+   Current:      $10.32
+   Market Value: $1104.24
+   Unrealized:   $124.19 (12.67%)
+
+==================================================
+SUMMARY
+==================================================
+Position Value: $3,587.67
+Unrealized PnL: $124.91
+Remaining Cash: $7,397.49
+Total Equity: $11,040.09
+
+
+
+==================================================
+
+2026-06-02 20:30:22
+==================================================
+
+==================================================
+ACCOUNT STATUS
+==================================================
+
+ARM
+   Qty:          2.0
+   Avg Cost:     $397.49
+   Current:      $402.71
+   Market Value: $805.42
+   Unrealized:   $10.44 (1.31%)
+
+DELL
+   Qty:          2.0
+   Avg Cost:     $447.95
+   Current:      $435.31
+   Market Value: $870.62
+   Unrealized:   $-25.28 (-2.82%)
+
+DDOG
+   Qty:          3.0
+   Avg Cost:     $263.94
+   Current:      $269.13
+   Market Value: $807.39
+   Unrealized:   $15.56 (1.97%)
+
+BB
+   Qty:          107.0
+   Avg Cost:     $9.16
+   Current:      $10.32
+   Market Value: $1104.24
+   Unrealized:   $124.19 (12.67%)
+
+==================================================
+SUMMARY
+==================================================
+Position Value: $3,587.67
+Unrealized PnL: $124.91
+Remaining Cash: $7,397.48
+Total Equity: $11,040.08
+
