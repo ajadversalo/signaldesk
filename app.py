@@ -20,6 +20,7 @@ from swing_scanner.scanner import download_bars as download_swing_bars
 from swing_scanner.scanner import scan as scan_swing_symbols
 from swing_scanner.persistence import save_predictions as save_swing_predictions
 from swing_scanner.persistence import prediction_history as swing_prediction_history
+from swing_scanner.persistence import settle_predictions as settle_swing_predictions
 from xsp_predictor import MODEL_VERSION, Prediction, analyze_short_put, run
 
 
@@ -127,7 +128,9 @@ def refresh_swing_scan_in_background(force: bool = False) -> bool:
 
     def refresh() -> None:
         try:
-            results, errors = scan_swing_symbols(download_swing_bars(swing_config.WATCHLIST))
+            bars_by_symbol = download_swing_bars(swing_config.WATCHLIST)
+            settled = settle_swing_predictions(bars_by_symbol)
+            results, errors = scan_swing_symbols(bars_by_symbol)
             saved, forecast_for = save_swing_predictions(results)
             history = swing_prediction_history()
             saved_at = time.time()
@@ -135,7 +138,8 @@ def refresh_swing_scan_in_background(force: bool = False) -> bool:
             rows = [result.to_dict() for result in results]
             payload = {"rows": rows, "errors": errors, "saved_at": saved_at,
                        "generated": generated, "saved": saved,
-                       "forecast_for": forecast_for, "history": history}
+                       "forecast_for": forecast_for, "history": history,
+                       "settled": settled}
             SWING_CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
             temporary = SWING_CACHE_FILE.with_suffix(".tmp")
             temporary.write_text(json.dumps(payload), encoding="utf-8")

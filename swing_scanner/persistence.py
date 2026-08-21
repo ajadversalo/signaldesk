@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 
@@ -107,5 +108,58 @@ def prediction_history(limit: int = 100) -> list[dict[str, object]]:
                    "score", "momentum_pct", "acceleration", "relative_volume",
                    "actual_price", "actual_direction"]
         return [dict(zip(columns, row)) for row in rows]
+    finally:
+        conn.close()
+
+
+def session_is_complete(date: str, now: datetime | None = None) -> bool:
+    """Treat a daily bar as final after a short post-close buffer."""
+    now_et = now or datetime.now(ZoneInfo("America/New_York"))
+    if now_et.tzinfo is None:
+        now_et = now_et.replace(tzinfo=ZoneInfo("America/New_York"))
+    else:
+        now_et = now_et.astimezone(ZoneInfo("America/New_York"))
+    session_date = pd.Timestamp(date).date()
+    return session_date < now_et.date() or (
+        session_date == now_et.date() and (now_et.hour, now_et.minute) >= (16, 15)
+    )
+
+
+def settle_predictions(bars_by_symbol: dict[str, pd.DataFrame],
+                       now: datetime | None = None) -> int:
+    """Settle pending calls using the close from their exact forecast session."""
+    conn = connect()
+    settled = 0
+    try:
+        initialize(conn)
+        pending = conn.execute(
+            """SELECT id, symbol, forecast_for, observed_price
+                 FROM swing_predictions
+                WHERE actual_direction IS NULL
+                ORDER BY forecast_for, rank"""
+        ).fetchall()
+        settled_at = datetime.now(timezone.utc).isoformat()
+        for prediction_id, symbol, forecast_for, observed_price in pending:
+            if not session_is_complete(forecast_for, now):
+                continue
+            bars = bars_by_symbol.get(symbol)
+            if bars is None or "close" not in bars.columns:
+                continue
+            close = bars["close"].dropna().copy()
+            close.index = pd.to_datetime(close.index).tz_localize(None).normalize()
+            matching = close.loc[close.index == pd.Timestamp(forecast_for)]
+            if matching.empty:
+                continue
+            actual_price = float(matching.iloc[-1])
+            actual_direction = "UP" if actual_price > float(observed_price) else "DOWN"
+            cursor = conn.execute(
+                """UPDATE swing_predictions
+                      SET actual_price = ?, actual_direction = ?, settled_at_utc = ?
+                    WHERE id = ? AND actual_direction IS NULL""",
+                (actual_price, actual_direction, settled_at, prediction_id),
+            )
+            settled += max(int(cursor.rowcount), 0)
+        conn.commit()
+        return settled
     finally:
         conn.close()
