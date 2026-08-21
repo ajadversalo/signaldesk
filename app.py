@@ -15,6 +15,7 @@ from pathlib import Path
 from flask import Flask, jsonify, redirect, render_template, request
 
 from database import prediction_stats, record_prediction
+from scan_runs import fail_run, finish_run, latest_runs, start_run
 from swing_scanner import config as swing_config
 from swing_scanner.scanner import download_bars as download_swing_bars
 from swing_scanner.scanner import scan as scan_swing_symbols
@@ -44,6 +45,59 @@ _swing_cache: dict[str, object] = {}
 _swing_lock = threading.Lock()
 _swing_settlement: dict[str, object] = {}
 _swing_settlement_lock = threading.Lock()
+_scan_run_cache: dict[str, object] = {}
+_scan_run_lock = threading.Lock()
+
+
+def _start_tracked_run(system: str) -> str | None:
+    try:
+        run_id = start_run(system)
+        with _scan_run_lock:
+            _scan_run_cache["loaded"] = False
+        return run_id
+    except Exception:
+        app.logger.exception("Could not persist %s scan start", system)
+        return None
+
+
+def _finish_tracked_run(run_id: str | None, result_count: int | None = None,
+                        error: Exception | None = None) -> None:
+    if not run_id:
+        return
+    try:
+        if error is None:
+            finish_run(run_id, int(result_count or 0))
+        else:
+            fail_run(run_id, str(error))
+    except Exception:
+        app.logger.exception("Could not persist scan completion")
+    finally:
+        with _scan_run_lock:
+            _scan_run_cache["loaded"] = False
+
+
+def refresh_scan_run_history_in_background() -> bool:
+    with _scan_run_lock:
+        if _scan_run_cache.get("loading") or _scan_run_cache.get("loaded"):
+            return False
+        _scan_run_cache["loading"] = True
+
+    def refresh() -> None:
+        run_id = _start_tracked_run("csp")
+        try:
+            runs = latest_runs()
+            with _scan_run_lock:
+                _scan_run_cache.update(runs=runs, loaded=True, error=None)
+        except Exception as exc:
+            app.logger.exception("Could not load scan run history")
+            with _scan_run_lock:
+                _scan_run_cache["error"] = str(exc)
+        finally:
+            with _scan_run_lock:
+                _scan_run_cache["loading"] = False
+
+    threading.Thread(target=refresh, name="scan-run-history", daemon=True).start()
+    return True
 
 
 def run_csp_screener(force: bool = False) -> None:
@@ -90,10 +144,12 @@ def refresh_csp_in_background(force: bool = True) -> bool:
                                   completed=True,
                                   notice=("Scan completed with no qualifying contracts."
                                           if not rows else None))
+            _finish_tracked_run(run_id, len(rows))
         except Exception as exc:
             app.logger.exception("Background CSP refresh failed")
             with _csp_state_lock:
                 _csp_state["error"] = str(exc)
+            _finish_tracked_run(run_id, error=exc)
         finally:
             with _csp_state_lock:
                 _csp_state["refreshing"] = False
@@ -164,6 +220,7 @@ def refresh_swing_scan_in_background(force: bool = False) -> bool:
         _swing_cache.update(refreshing=True, error=None)
 
     def refresh() -> None:
+        run_id = _start_tracked_run("swing")
         try:
             bars_by_symbol = download_swing_bars(swing_config.WATCHLIST)
             settled = settle_swing_predictions(bars_by_symbol)
@@ -186,10 +243,12 @@ def refresh_swing_scan_in_background(force: bool = False) -> bool:
             with _swing_lock:
                 _swing_cache.update(payload)
                 _swing_cache["time"] = saved_at
+            _finish_tracked_run(run_id, sum(result.candidate for result in results))
         except Exception as exc:
             app.logger.exception("Background swing scan failed")
             with _swing_lock:
                 _swing_cache["error"] = str(exc)
+            _finish_tracked_run(run_id, error=exc)
         finally:
             with _swing_lock:
                 _swing_cache["refreshing"] = False
@@ -320,12 +379,15 @@ def refresh_prediction_in_background(force: bool = False) -> bool:
         _cache.update(refreshing=True, error=None)
 
     def refresh() -> None:
+        run_id = _start_tracked_run("xsp")
         try:
             get_prediction(force=force)
+            _finish_tracked_run(run_id, 1)
         except Exception as exc:
             app.logger.exception("Background prediction refresh failed")
             with _lock:
                 _cache["error"] = str(exc)
+            _finish_tracked_run(run_id, error=exc)
         finally:
             with _lock:
                 _cache["refreshing"] = False
@@ -387,6 +449,7 @@ _load_prediction_cache()
 
 @app.get("/")
 def dashboard():
+    refresh_scan_run_history_in_background()
     prediction_cache = cached_prediction()
     prediction = asdict(prediction_cache[0]) if prediction_cache else None
     refresh_xsp_history_in_background()
@@ -416,9 +479,13 @@ def dashboard():
         csp_error = _csp_state.get("error")
     with _swing_settlement_lock:
         swing_settlement_running = bool(_swing_settlement.get("running"))
+    with _scan_run_lock:
+        scan_runs = dict(_scan_run_cache.get("runs", {}))
+        scan_runs_loading = bool(_scan_run_cache.get("loading"))
 
     return render_template(
         "dashboard.html", prediction=prediction, stats=stats,
+        scan_runs=scan_runs, scan_runs_loading=scan_runs_loading,
         xsp_refreshing=xsp_refreshing, xsp_history_loading=xsp_history_loading,
         csp_rows=csp_rows, csp_generated=csp_generated,
         csp_v2=sum(row.get("source_model") == "V2" for row in csp_rows),
