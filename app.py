@@ -194,9 +194,9 @@ def get_csp_results() -> tuple[list[dict[str, object]], str | None]:
     return rows, generated
 
 
-def merge_csp_results_by_stock(rows: list[dict[str, object]]) -> list[dict[str, object]]:
-    """Return one display row per ticker with each model's best contract."""
-    stocks: dict[str, dict[str, object]] = {}
+def group_csp_results_by_model(rows: list[dict[str, object]]) -> dict[str, list[dict[str, object]]]:
+    """Group every qualifying contract under its stock, separately by model."""
+    grouped: dict[str, dict[str, dict[str, object]]] = {"v2": {}, "v3": {}}
     for row in rows:
         dte = row.get("dte")
         if dte is None or not 7 <= float(dte) <= 14:
@@ -205,22 +205,21 @@ def merge_csp_results_by_stock(rows: list[dict[str, object]]) -> list[dict[str, 
         model = str(row.get("source_model") or "").lower()
         if not symbol or model not in {"v2", "v3"}:
             continue
-        stock = stocks.setdefault(
-            symbol, {"symbol": symbol, "price": row.get("price"), "v2": None, "v3": None}
+        stock = grouped[model].setdefault(
+            symbol, {"symbol": symbol, "price": row.get("price"), "contracts": []}
         )
-        current = stock[model]
-        if current is None or float(row.get("ranking_score") or 0) > float(
-            current.get("ranking_score") or 0
-        ):
-            stock[model] = row
-    return sorted(
-        stocks.values(),
-        key=lambda stock: max(
-            float((stock.get("v2") or {}).get("ranking_score") or 0),
-            float((stock.get("v3") or {}).get("ranking_score") or 0),
-        ),
-        reverse=True,
-    )
+        stock["contracts"].append(row)
+    result: dict[str, list[dict[str, object]]] = {"v2": [], "v3": []}
+    for model, stocks in grouped.items():
+        for stock in stocks.values():
+            stock["contracts"].sort(
+                key=lambda contract: float(contract.get("ranking_score") or 0), reverse=True
+            )
+            stock["best_score"] = stock["contracts"][0].get("ranking_score")
+        result[model] = sorted(
+            stocks.values(), key=lambda stock: float(stock.get("best_score") or 0), reverse=True
+        )
+    return result
 
 
 def _load_swing_cache() -> None:
@@ -684,16 +683,17 @@ def history():
 def csp_screener():
     try:
         rows, generated = get_csp_results()
-        stocks = merge_csp_results_by_stock(rows)
+        stocks = group_csp_results_by_model(rows)
         with _csp_state_lock:
             error = _csp_state.get("error")
             refreshing = bool(_csp_state.get("refreshing"))
-        return render_template("csp.html", rows=rows, stocks=stocks, generated=generated,
+        return render_template("csp.html", rows=rows, v2_stocks=stocks["v2"],
+                               v3_stocks=stocks["v3"], generated=generated,
                                error=error, refreshing=refreshing)
     except Exception as exc:
         app.logger.exception("CSP results failed")
-        return render_template("csp.html", rows=[], stocks=[], generated=None,
-                               error=str(exc)), 503
+        return render_template("csp.html", rows=[], v2_stocks=[], v3_stocks=[],
+                               generated=None, error=str(exc)), 503
 
 
 @app.get("/api/csp/status")
