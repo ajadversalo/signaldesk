@@ -135,8 +135,6 @@ def scan_v2_candidates(
     )) + 2  # v2's no-earnings-in-window contribution
     found: list[dict] = []
     for expiry, dte in expirations:
-        if dte > 21:
-            continue
         puts = option_chains.get(expiry)
         if puts is None:
             puts = ticker.option_chain(expiry).puts

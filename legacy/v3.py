@@ -42,8 +42,8 @@ WATCHLIST = [
 
 # Contract constraints. A 0.15 absolute delta is often interpreted as roughly a
 # 15% market-implied chance of finishing ITM, but it is not a literal guarantee.
-MIN_DTE = 14
-MAX_DTE = 30
+MIN_DTE = 7
+MAX_DTE = 14
 MIN_ABS_DELTA = 0.05
 MAX_ABS_DELTA = 0.15
 MAX_PROBABILITY_ITM = 0.18

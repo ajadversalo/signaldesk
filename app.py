@@ -194,6 +194,35 @@ def get_csp_results() -> tuple[list[dict[str, object]], str | None]:
     return rows, generated
 
 
+def merge_csp_results_by_stock(rows: list[dict[str, object]]) -> list[dict[str, object]]:
+    """Return one display row per ticker with each model's best contract."""
+    stocks: dict[str, dict[str, object]] = {}
+    for row in rows:
+        dte = row.get("dte")
+        if dte is None or not 7 <= float(dte) <= 14:
+            continue
+        symbol = str(row.get("symbol") or "")
+        model = str(row.get("source_model") or "").lower()
+        if not symbol or model not in {"v2", "v3"}:
+            continue
+        stock = stocks.setdefault(
+            symbol, {"symbol": symbol, "price": row.get("price"), "v2": None, "v3": None}
+        )
+        current = stock[model]
+        if current is None or float(row.get("ranking_score") or 0) > float(
+            current.get("ranking_score") or 0
+        ):
+            stock[model] = row
+    return sorted(
+        stocks.values(),
+        key=lambda stock: max(
+            float((stock.get("v2") or {}).get("ranking_score") or 0),
+            float((stock.get("v3") or {}).get("ranking_score") or 0),
+        ),
+        reverse=True,
+    )
+
+
 def _load_swing_cache() -> None:
     if not SWING_CACHE_FILE.exists():
         return
@@ -655,14 +684,16 @@ def history():
 def csp_screener():
     try:
         rows, generated = get_csp_results()
+        stocks = merge_csp_results_by_stock(rows)
         with _csp_state_lock:
             error = _csp_state.get("error")
             refreshing = bool(_csp_state.get("refreshing"))
-        return render_template("csp.html", rows=rows, generated=generated,
+        return render_template("csp.html", rows=rows, stocks=stocks, generated=generated,
                                error=error, refreshing=refreshing)
     except Exception as exc:
         app.logger.exception("CSP results failed")
-        return render_template("csp.html", rows=[], generated=None, error=str(exc)), 503
+        return render_template("csp.html", rows=[], stocks=[], generated=None,
+                               error=str(exc)), 503
 
 
 @app.get("/api/csp/status")
