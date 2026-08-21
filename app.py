@@ -499,6 +499,16 @@ def dashboard():
     except Exception:
         app.logger.exception("Dashboard CSP summary failed")
         csp_rows, csp_generated = [], None
+    csp_stocks_by_model = group_csp_results_by_model(csp_rows)
+    csp_saved_stocks = sorted(
+        (
+            {**stock, "source_model": model.upper()}
+            for model, stocks in csp_stocks_by_model.items()
+            for stock in stocks
+        ),
+        key=lambda stock: float(stock.get("best_score") or 0),
+        reverse=True,
+    )
 
     swing_cache = cached_swing_scan()
     refresh_swing_history_in_background()
@@ -528,6 +538,7 @@ def dashboard():
         scan_runs=scan_runs, scan_runs_loading=scan_runs_loading,
         xsp_refreshing=xsp_refreshing, xsp_history_loading=xsp_history_loading,
         csp_rows=csp_rows, csp_generated=csp_generated,
+        csp_saved_stocks=csp_saved_stocks,
         csp_v2=sum(row.get("source_model") == "V2" for row in csp_rows),
         csp_v3=sum(row.get("source_model") == "V3" for row in csp_rows),
         csp_refreshing=csp_refreshing, csp_error=csp_error,
