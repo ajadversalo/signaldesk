@@ -94,7 +94,6 @@ def refresh_scan_run_history_in_background() -> bool:
         _scan_run_cache["loading"] = True
 
     def refresh() -> None:
-        run_id = _start_tracked_run("csp")
         try:
             runs = latest_runs()
             with _scan_run_lock:
@@ -144,9 +143,11 @@ def refresh_csp_in_background(force: bool = True) -> bool:
     with _csp_state_lock:
         if _csp_state.get("refreshing"):
             return False
-        _csp_state.update(refreshing=True, error=None)
+        _csp_state.update(refreshing=True, completed=False, error=None,
+                          started_at=time.time(), notice=None)
 
     def refresh() -> None:
+        run_id = _start_tracked_run("csp")
         try:
             run_csp_screener(force=force)
             rows, generated = get_csp_results()
@@ -163,7 +164,7 @@ def refresh_csp_in_background(force: bool = True) -> bool:
             _finish_tracked_run(run_id, error=exc)
         finally:
             with _csp_state_lock:
-                _csp_state["refreshing"] = False
+                _csp_state.update(refreshing=False, finished_at=time.time())
 
     threading.Thread(target=refresh, name="csp-refresh", daemon=True).start()
     return True
@@ -668,6 +669,10 @@ def csp_screener():
 def csp_status():
     with _csp_state_lock:
         return jsonify({"refreshing": bool(_csp_state.get("refreshing")),
+                        "completed": bool(_csp_state.get("completed")),
+                        "result_count": _csp_state.get("result_count"),
+                        "generated": _csp_state.get("generated"),
+                        "notice": _csp_state.get("notice"),
                         "error": _csp_state.get("error")})
 
 

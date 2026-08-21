@@ -3,6 +3,12 @@ document.querySelectorAll('.strategy-page-run').forEach(button => {
     .then(response => response.json())
     .then(status => {
       if (!status.refreshing) {
+        if (status.error) {
+          button.disabled = false;
+          button.textContent = 'Try again';
+          button.title = status.error;
+          return;
+        }
         location.reload();
         return;
       }
@@ -25,4 +31,11 @@ document.querySelectorAll('.strategy-page-run').forEach(button => {
       button.title = error.message;
     }
   });
+
+  // A scan may have been started from the dashboard or before this page was
+  // refreshed. Resume polling instead of leaving a disabled “Running” button
+  // frozen forever.
+  if (button.disabled && button.dataset.statusUrl) {
+    setTimeout(poll, 800);
+  }
 });

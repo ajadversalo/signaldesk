@@ -320,12 +320,23 @@ def yahoo_put_quotes(puts: pd.DataFrame) -> dict[float, object]:
     return quotes
 
 
-def process_symbol(symbol: str, ib: IB) -> tuple[list[dict], list[dict]]:
+def process_symbol(
+    symbol: str,
+    ib: IB,
+    *,
+    ticker: yf.Ticker | None = None,
+    history: pd.DataFrame | None = None,
+    info: dict | None = None,
+    expirations: list[tuple[str, int]] | None = None,
+    option_chains: dict[str, pd.DataFrame] | None = None,
+) -> tuple[list[dict], list[dict]]:
+    """Process one symbol, reusing market data supplied by combined scanners."""
     accepted: list[dict] = []
     rejected: list[dict] = []
     try:
-        ticker = yf.Ticker(symbol)
-        history = ticker.history(period="1y", auto_adjust=True)
+        ticker = ticker or yf.Ticker(symbol)
+        if history is None:
+            history = ticker.history(period="1y", auto_adjust=True)
         if len(history) < 220:
             return accepted, [{"symbol": symbol, "reason": "insufficient price history"}]
 
@@ -340,10 +351,11 @@ def process_symbol(symbol: str, ib: IB) -> tuple[list[dict], list[dict]]:
         if avg_volume < MIN_UNDERLYING_AVG_VOLUME:
             return accepted, [{"symbol": symbol, "reason": "low underlying volume"}]
 
-        try:
-            info = ticker.info or {}
-        except Exception:
-            info = {}
+        if info is None:
+            try:
+                info = ticker.info or {}
+            except Exception:
+                info = {}
         quote_type = str(info.get("quoteType", "")).upper()
         is_fund = quote_type in {"ETF", "MUTUALFUND", "INDEX"}
         earnings = None if is_fund else next_earnings_date(ticker)
@@ -361,11 +373,17 @@ def process_symbol(symbol: str, ib: IB) -> tuple[list[dict], list[dict]]:
         if dividend_yield > 1:
             dividend_yield /= 100
 
-        for expiry, dte in valid_expirations(ticker):
+        if expirations is None:
+            expirations = valid_expirations(ticker)
+        option_chains = option_chains if option_chains is not None else {}
+        for expiry, dte in expirations:
             if earnings_days is not None and -EARNINGS_BUFFER_DAYS <= earnings_days <= dte + EARNINGS_BUFFER_DAYS:
                 rejected.append({"symbol": symbol, "expiry": expiry, "reason": "earnings near/before expiration"})
                 continue
-            puts = ticker.option_chain(expiry).puts
+            puts = option_chains.get(expiry)
+            if puts is None:
+                puts = ticker.option_chain(expiry).puts
+                option_chains[expiry] = puts
             strikes = sorted({
                 float(value)
                 for value in puts.get("strike", pd.Series(dtype=float)).dropna()

@@ -113,6 +113,8 @@ def scan_v2_candidates(
     history: pd.DataFrame,
     info: dict,
     components: dict,
+    expirations: list[tuple[str, int]],
+    option_chains: dict[str, pd.DataFrame],
 ) -> list[dict]:
     """Run the cleaned v2 contract logic independently of v3's hard filters."""
     if len(history) < 220:
@@ -132,10 +134,13 @@ def scan_v2_candidates(
         "v2_fundamentals_score", "v2_stock_risk_score",
     )) + 2  # v2's no-earnings-in-window contribution
     found: list[dict] = []
-    for expiry, dte in v3.valid_expirations(ticker):
+    for expiry, dte in expirations:
         if dte > 21:
             continue
-        puts = ticker.option_chain(expiry).puts
+        puts = option_chains.get(expiry)
+        if puts is None:
+            puts = ticker.option_chain(expiry).puts
+            option_chains[expiry] = puts
         for _, put in puts.iterrows():
             strike = v3.number(put.get("strike"))
             bid = v3.number(put.get("bid"))
@@ -249,15 +254,21 @@ def main() -> None:
             symbol_v2: list[dict] = []
             ticker = yf.Ticker(symbol)
             history = yahoo_history(ticker, symbol)
+            info: dict = {}
+            expirations: list[tuple[str, int]] = []
+            option_chains: dict[str, pd.DataFrame] = {}
             if len(history) >= 220:
                 try:
                     info = ticker.info or {}
                 except Exception:
                     info = {}
                 try:
+                    expirations = v3.valid_expirations(ticker)
                     components = v2_stock_components(history, spy_close, info)
                     component_cache[symbol] = components
-                    symbol_v2 = scan_v2_candidates(ticker, history, info, components)
+                    symbol_v2 = scan_v2_candidates(
+                        ticker, history, info, components, expirations, option_chains
+                    )
                     for item in symbol_v2:
                         item["symbol"] = symbol
                     v2_candidates.extend(symbol_v2)
@@ -270,7 +281,10 @@ def main() -> None:
                     unavailable_history_count += 1
                 rejections.append({"symbol": symbol, "reason": "v2 insufficient/unavailable price history"})
 
-            found, rejected = v3.process_symbol(symbol, ib)
+            found, rejected = v3.process_symbol(
+                symbol, ib, ticker=ticker, history=history, info=info,
+                expirations=expirations, option_chains=option_chains,
+            )
             rejections.extend(rejected)
             if found:
                 v3_candidates.extend(prepare_v3_candidate(item) for item in found)
