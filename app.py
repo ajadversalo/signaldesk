@@ -589,19 +589,20 @@ def swing_screener():
         error = _swing_cache.get("error") or _swing_cache.get("history_error")
         history_refreshing = bool(_swing_cache.get("history_refreshing"))
         history_error = _swing_cache.get("history_error")
+        history = list(_swing_cache.get("history", []))
+        saved = int(_swing_cache.get("saved", 0))
+        forecast_for = _swing_cache.get("forecast_for")
     if not cached:
         return render_template("swing.html", rows=[], errors={}, generated=None,
                                refreshing=refreshing, error=error, saved=0,
-                               forecast_for=None, history=[],
+                               forecast_for=forecast_for, history=history,
                                scanner_version=swing_config.SCANNER_VERSION,
                                history_refreshing=history_refreshing,
                                history_error=history_error)
     rows, errors, generated, _fresh = cached
     return render_template("swing.html", rows=rows, errors=errors, generated=generated,
                            refreshing=refreshing, error=error,
-                           saved=int(_swing_cache.get("saved", 0)),
-                           forecast_for=_swing_cache.get("forecast_for"),
-                           history=_swing_cache.get("history", []),
+                           saved=saved, forecast_for=forecast_for, history=history,
                            scanner_version=swing_config.SCANNER_VERSION,
                            history_refreshing=history_refreshing,
                            history_error=history_error)
