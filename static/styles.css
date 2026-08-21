@@ -47,3 +47,21 @@ footer { display:flex; gap:24px; justify-content:space-between; padding:28px 0 4
 @media(max-width:1000px){.dashboard-grid,.dashboard-history-grid{grid-template-columns:1fr}.dashboard-actions{grid-template-columns:1fr}.system-card{min-height:420px}.dashboard-shell{width:min(100% - 24px,1180px)}}
 @media(max-width:760px){.dashboard-hero{padding:48px 0 36px}.dashboard-note{grid-template-columns:1fr}.system-card{min-height:390px;padding:22px}}
 @media(max-width:760px){.shell,.csp-shell{width:min(100% - 24px,1180px)}.topbar{height:auto;min-height:88px;align-items:flex-start;padding:22px 0;gap:18px}.brand em{display:none}.site-nav{justify-content:flex-end;gap:14px!important;flex-wrap:wrap}.overview-hero,.hero,.grid,.csp-hero,.method-note{grid-template-columns:1fr}.overview-hero{gap:34px;padding:52px 0 38px}.overview-probability{padding:25px 0 0;border-left:0;border-top:1px solid var(--line)}.hero{gap:38px;padding:52px 0 38px}.csp-hero{gap:28px;padding:48px 0 35px}.outcome-card{grid-template-columns:1fr 1fr}.section-title{align-items:start;gap:15px}.outcome-empty{flex-direction:column}.overview-context{grid-template-columns:1fr 1fr}.overview-context>div:nth-child(2){border-right:0}.overview-context>div:nth-child(-n+2){border-bottom:1px solid var(--line)}.workspace-links{grid-template-columns:1fr}.confidence-card{border-left:0;border-top:1px solid var(--line);padding:28px 0 0}.warning{align-items:start}.warning p{display:block;margin:5px 0 0}.put-form{grid-template-columns:1fr}.news-list a{grid-template-columns:24px 1fr}.news-list time{display:none}.panel{padding:22px}.csp-table-panel{padding:0}.stats-strip,.csp-stats{grid-template-columns:1fr 1fr}.stats-strip div:nth-child(2),.csp-stats div:nth-child(2){border-right:0}.stats-strip div:nth-child(-n+2),.csp-stats div:nth-child(-n+2){border-bottom:1px solid var(--line)}.csp-legend{width:100%;margin-left:0}footer{flex-direction:column;gap:10px}}
+.pwa-install {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 1000;
+  padding: .75rem 1rem;
+  border: 1px solid rgba(255, 255, 255, .22);
+  border-radius: 999px;
+  background: #d8ff3e;
+  color: #090d0b;
+  font: 700 .85rem/1 Manrope, sans-serif;
+  box-shadow: 0 .75rem 2rem rgba(0, 0, 0, .35);
+  cursor: pointer;
+}
+
+.pwa-install:hover { filter: brightness(1.08); }
+.pwa-install:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
+.pwa-install[hidden] { display: none; }
