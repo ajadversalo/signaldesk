@@ -163,14 +163,14 @@ def record_prediction(prediction) -> bool:
         conn.execute(
             """UPDATE predictions
                    SET forecast_for = ?,
-                       actual_close = ?,
-                       actual_direction = CASE WHEN ? > observed_close THEN 'UP' ELSE 'DOWN' END,
+                       actual_close = CASE WHEN market_data_symbol = ? THEN ? ELSE NULL END,
+                       actual_direction = ?,
                        settled_at_utc = ?
-                   WHERE market_data_symbol = ?
+                   WHERE requested_symbol = ?
                      AND market_session_date = ?
                      AND actual_direction IS NULL""",
-            (p["market_session_date"], p["current_price"], p["current_price"],
-             p["generated_at_utc"], p["market_data_symbol"],
+            (p["market_session_date"], p["market_data_symbol"], p["current_price"],
+             p["momentum_direction"], p["generated_at_utc"], p["symbol"],
              p["previous_market_session_date"]),
         )
         cursor = conn.execute(

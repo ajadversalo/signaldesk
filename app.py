@@ -420,7 +420,12 @@ def refresh_prediction_in_background(force: bool = False) -> bool:
     def refresh() -> None:
         run_id = _start_tracked_run("xsp")
         try:
-            get_prediction(force=force)
+            result, _stories, _cached = get_prediction(force=force)
+            saved = record_prediction(result)
+            stats = prediction_stats(result.model_version)
+            with _lock:
+                _cache.update(saved=saved, stats=stats, stats_loaded=True,
+                              storage_error=None)
             _finish_tracked_run(run_id, 1)
         except Exception as exc:
             app.logger.exception("Background prediction refresh failed")
