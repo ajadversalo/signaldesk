@@ -11,7 +11,6 @@ import threading
 import time
 from dataclasses import asdict
 from pathlib import Path
-
 from flask import Flask, jsonify, redirect, render_template, request, send_from_directory
 
 from database import prediction_stats, record_prediction
