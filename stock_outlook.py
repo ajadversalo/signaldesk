@@ -142,7 +142,7 @@ def analyze_symbol(value: str) -> dict:
     ticker = yf.Ticker(symbol)
     bars = ticker.history(period="5y", interval="1d", auto_adjust=True)
     if bars.empty:
-        raise ValueError(f"No market history was returned for {symbol}.")
+        raise ValueError(f"{symbol} was not found. Check the ticker symbol and try again.")
     result = analyze_history(symbol, bars)
     try:
         _add_options_ranges(result, ticker)

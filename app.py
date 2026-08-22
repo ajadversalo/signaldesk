@@ -13,8 +13,8 @@ from dataclasses import asdict
 from pathlib import Path
 from flask import Flask, jsonify, redirect, render_template, request, send_from_directory
 
-from database import (prediction_stats, record_prediction, record_stock_outlook,
-                      stock_outlook_history)
+from database import (delete_stock_outlook, prediction_stats, record_prediction,
+                      record_stock_outlook, stock_outlook_history)
 from scan_runs import fail_run, finish_run, latest_runs, start_run
 from stock_outlook import analyze_symbol, normalize_symbol
 from swing_scanner import config as swing_config
@@ -731,6 +731,15 @@ def stock_outlook_api(symbol: str):
     except Exception as exc:
         app.logger.exception("Stock outlook API failed")
         return jsonify({"error": str(exc)}), 503
+
+
+@app.post("/outlook/history/<int:outlook_id>/delete")
+def delete_stock_outlook_history(outlook_id: int):
+    try:
+        delete_stock_outlook(outlook_id)
+    except Exception:
+        app.logger.exception("Could not delete stock outlook")
+    return redirect("/outlook#history", code=303)
 
 
 @app.get("/csp")

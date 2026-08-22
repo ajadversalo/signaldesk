@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from stock_outlook import analyze_history, normalize_symbol
+from stock_outlook import analyze_history, analyze_symbol, normalize_symbol
 
 
 def sample_bars(periods=900):
@@ -29,3 +29,13 @@ def test_symbol_validation():
     assert normalize_symbol(" brk-b ") == "BRK-B"
     with pytest.raises(ValueError):
         normalize_symbol("AAPL; DROP TABLE")
+
+
+def test_unknown_symbol_has_clear_error(monkeypatch):
+    class MissingTicker:
+        def history(self, **kwargs):
+            return pd.DataFrame()
+
+    monkeypatch.setattr("stock_outlook.yf.Ticker", lambda symbol: MissingTicker())
+    with pytest.raises(ValueError, match="MISSING was not found"):
+        analyze_symbol("MISSING")

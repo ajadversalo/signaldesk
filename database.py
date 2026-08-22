@@ -303,16 +303,29 @@ def stock_outlook_history(limit: int = 30) -> list[dict[str, Any]]:
     try:
         initialize(conn)
         rows = conn.execute(
-            """SELECT analyzed_at_utc, result_json
+            """SELECT id, analyzed_at_utc, result_json
                FROM stock_outlooks
                ORDER BY analyzed_at_utc DESC LIMIT ?""",
             (max(1, min(int(limit), 100)),),
         ).fetchall()
         history = []
-        for analyzed_at, payload in rows:
+        for outlook_id, analyzed_at, payload in rows:
             result = json.loads(payload)
+            result["id"] = int(outlook_id)
             result["analyzed_at_utc"] = analyzed_at
             history.append(result)
         return history
+    finally:
+        conn.close()
+
+
+def delete_stock_outlook(outlook_id: int) -> bool:
+    """Delete one saved outlook by its database identifier."""
+    conn = connect()
+    try:
+        initialize(conn)
+        cursor = conn.execute("DELETE FROM stock_outlooks WHERE id = ?", (int(outlook_id),))
+        conn.commit()
+        return cursor.rowcount > 0
     finally:
         conn.close()

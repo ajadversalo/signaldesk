@@ -72,3 +72,7 @@ def test_stock_outlook_history_updates_same_session_snapshot(tmp_path, monkeypat
     assert history[0]["symbol"] == "AAPL"
     assert history[0]["current_price"] == 226.0
     assert history[0]["analyzed_at_utc"]
+
+    assert database.delete_stock_outlook(history[0]["id"])
+    assert database.stock_outlook_history() == []
+    assert not database.delete_stock_outlook(history[0]["id"])
