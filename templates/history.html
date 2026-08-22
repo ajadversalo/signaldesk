@@ -4,14 +4,14 @@
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#090d0b"><meta name="apple-mobile-web-app-capable" content="yes">
   <link rel="manifest" href="{{ url_for('static',filename='manifest.webmanifest') }}"><link rel="icon" href="{{ url_for('static',filename='app-icon.svg') }}" type="image/svg+xml"><link rel="apple-touch-icon" href="{{ url_for('static',filename='app-icon.svg') }}"><script defer src="{{ url_for('static',filename='pwa.js') }}"></script>
-  <title>Prediction History · XSP Signal Desk</title>
+  <title>Prediction History · SignalDesk</title>
   <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
 </head>
 <body><div class="noise"></div><main class="shell">
   <header class="topbar">
-    <a class="brand" href="/"><span class="brand-mark">X</span><span>Waverider <em>Signal Desk</em></span></a>
+    <a class="brand" href="/"><span class="brand-mark">X</span><span>SignalDesk</span></a>
     <nav class="site-nav"><a href="/">Dashboard</a><a class="active" href="/xsp">XSP</a><a href="/csp">CSP</a><a href="/swing">Swing</a><a href="/outlook">Outlook</a><a href="/methodology">Methodology</a></nav>
   </header>
   <section class="history-hero"><p class="eyebrow">XSP / Accountability ledger</p><h1>Prediction history.</h1><p class="lede">Every XSP call is frozen when first observed, then scored against the following session's close.</p><a class="text-link" href="/xsp">← Back to XSP signal</a></section>

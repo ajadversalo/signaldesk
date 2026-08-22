@@ -1,6 +1,6 @@
 {
-  "name": "Waverider Signal Desk",
-  "short_name": "Signal Desk",
+  "name": "SignalDesk",
+  "short_name": "SignalDesk",
   "description": "XSP direction, CSP opportunities, and swing momentum signals.",
   "start_url": "/",
   "scope": "/",

@@ -16,7 +16,7 @@ function createInstallButton() {
   button.type = 'button';
   button.textContent = 'Install app';
   button.hidden = true;
-  button.setAttribute('aria-label', 'Install Waverider Signal Desk');
+  button.setAttribute('aria-label', 'Install SignalDesk');
   document.body.appendChild(button);
 
   button.addEventListener('click', async () => {
@@ -30,7 +30,7 @@ function createInstallButton() {
 
     const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent);
     if (isIos) {
-      window.alert('To install Signal Desk, tap Share, then Add to Home Screen.');
+      window.alert('To install SignalDesk, tap Share, then Add to Home Screen.');
     }
   });
 
