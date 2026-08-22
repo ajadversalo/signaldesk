@@ -52,3 +52,23 @@ def test_settlement_survives_market_data_fallback_change(tmp_path, monkeypatch):
     # Prices from differently scaled proxies must not be compared or displayed as a return.
     assert settled["actual_close"] is None
     assert settled["return_percent"] is None
+
+
+def test_stock_outlook_history_updates_same_session_snapshot(tmp_path, monkeypatch):
+    monkeypatch.delenv("TURSO_DATABASE_URL", raising=False)
+    monkeypatch.delenv("TURSO_AUTH_TOKEN", raising=False)
+    monkeypatch.setenv("LOCAL_DATABASE_PATH", str(tmp_path / "predictions.db"))
+    result = {
+        "symbol": "AAPL", "as_of": "2026-08-21", "current_price": 225.0,
+        "bias": "Bullish", "outlooks": [{"weeks": 1, "range_low": 218.0,
+                                            "range_high": 232.0}],
+    }
+
+    database.record_stock_outlook(result)
+    database.record_stock_outlook({**result, "current_price": 226.0})
+    history = database.stock_outlook_history()
+
+    assert len(history) == 1
+    assert history[0]["symbol"] == "AAPL"
+    assert history[0]["current_price"] == 226.0
+    assert history[0]["analyzed_at_utc"]

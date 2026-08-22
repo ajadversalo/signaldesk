@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import os
+import json
 import sqlite3
 from dataclasses import asdict
+from datetime import datetime, timezone
 from typing import Any
 
 import requests
@@ -31,6 +33,19 @@ CREATE TABLE IF NOT EXISTS predictions (
     actual_direction TEXT CHECK(actual_direction IN ('UP', 'DOWN')),
     settled_at_utc TEXT,
     UNIQUE(market_data_symbol, market_session_date)
+)
+"""
+
+OUTLOOK_SCHEMA = """
+CREATE TABLE IF NOT EXISTS stock_outlooks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    symbol TEXT NOT NULL,
+    market_session_date TEXT NOT NULL,
+    analyzed_at_utc TEXT NOT NULL,
+    current_price REAL NOT NULL,
+    bias TEXT NOT NULL,
+    result_json TEXT NOT NULL,
+    UNIQUE(symbol, market_session_date)
 )
 """
 
@@ -121,6 +136,7 @@ class TursoHttpConnection:
 
 def initialize(conn) -> None:
     conn.execute(SCHEMA)
+    conn.execute(OUTLOOK_SCHEMA)
     columns = {row[1] for row in conn.execute("PRAGMA table_info(predictions)").fetchall()}
     if "model_version" not in columns:
         # Preserve pre-versioning rows without mixing them into current metrics.
@@ -254,3 +270,49 @@ def enrich_row(values) -> dict[str, Any]:
         if row["actual_close"] is not None else None
     )
     return row
+
+
+def record_stock_outlook(result: dict[str, Any]) -> None:
+    """Save one outlook snapshot per symbol and completed market session."""
+    analyzed_at = datetime.now(timezone.utc).isoformat()
+    payload = json.dumps(result, separators=(",", ":"), allow_nan=False)
+    conn = connect()
+    try:
+        initialize(conn)
+        conn.execute(
+            """INSERT INTO stock_outlooks (
+                   symbol, market_session_date, analyzed_at_utc,
+                   current_price, bias, result_json
+               ) VALUES (?, ?, ?, ?, ?, ?)
+               ON CONFLICT(symbol, market_session_date) DO UPDATE SET
+                   analyzed_at_utc = excluded.analyzed_at_utc,
+                   current_price = excluded.current_price,
+                   bias = excluded.bias,
+                   result_json = excluded.result_json""",
+            (result["symbol"], result["as_of"], analyzed_at,
+             result["current_price"], result["bias"], payload),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def stock_outlook_history(limit: int = 30) -> list[dict[str, Any]]:
+    """Return recent saved outlook snapshots, newest analysis first."""
+    conn = connect()
+    try:
+        initialize(conn)
+        rows = conn.execute(
+            """SELECT analyzed_at_utc, result_json
+               FROM stock_outlooks
+               ORDER BY analyzed_at_utc DESC LIMIT ?""",
+            (max(1, min(int(limit), 100)),),
+        ).fetchall()
+        history = []
+        for analyzed_at, payload in rows:
+            result = json.loads(payload)
+            result["analyzed_at_utc"] = analyzed_at
+            history.append(result)
+        return history
+    finally:
+        conn.close()

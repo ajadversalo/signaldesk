@@ -13,7 +13,8 @@ from dataclasses import asdict
 from pathlib import Path
 from flask import Flask, jsonify, redirect, render_template, request, send_from_directory
 
-from database import prediction_stats, record_prediction
+from database import (prediction_stats, record_prediction, record_stock_outlook,
+                      stock_outlook_history)
 from scan_runs import fail_run, finish_run, latest_runs, start_run
 from stock_outlook import analyze_symbol, normalize_symbol
 from swing_scanner import config as swing_config
@@ -695,7 +696,7 @@ def history():
 @app.get("/outlook")
 def stock_outlook():
     symbol = request.args.get("symbol", "").strip()
-    result, error = None, None
+    result, error, storage_error = None, None, None
     if symbol:
         try:
             symbol = normalize_symbol(symbol)
@@ -703,13 +704,28 @@ def stock_outlook():
         except Exception as exc:
             app.logger.warning("Stock outlook failed for %s: %s", symbol, exc)
             error = str(exc)
-    return render_template("outlook.html", symbol=symbol, result=result, error=error)
+        if result:
+            try:
+                record_stock_outlook(result)
+            except Exception as exc:
+                app.logger.exception("Could not save stock outlook")
+                storage_error = str(exc)
+    try:
+        history = stock_outlook_history()
+    except Exception as exc:
+        app.logger.exception("Stock outlook history failed")
+        history = []
+        storage_error = storage_error or str(exc)
+    return render_template("outlook.html", symbol=symbol, result=result, error=error,
+                           history=history, storage_error=storage_error)
 
 
 @app.get("/api/outlook/<symbol>")
 def stock_outlook_api(symbol: str):
     try:
-        return jsonify(analyze_symbol(symbol))
+        result = analyze_symbol(symbol)
+        record_stock_outlook(result)
+        return jsonify(result)
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
     except Exception as exc:
