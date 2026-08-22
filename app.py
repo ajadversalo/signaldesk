@@ -15,6 +15,7 @@ from flask import Flask, jsonify, redirect, render_template, request, send_from_
 
 from database import prediction_stats, record_prediction
 from scan_runs import fail_run, finish_run, latest_runs, start_run
+from stock_outlook import analyze_symbol, normalize_symbol
 from swing_scanner import config as swing_config
 from swing_scanner.scanner import download_bars as download_swing_bars
 from swing_scanner.scanner import scan as scan_swing_symbols
@@ -504,15 +505,11 @@ def dashboard():
         app.logger.exception("Dashboard CSP summary failed")
         csp_rows, csp_generated = [], None
     csp_stocks_by_model = group_csp_results_by_model(csp_rows)
-    csp_saved_stocks = sorted(
-        (
-            {**stock, "source_model": model.upper()}
-            for model, stocks in csp_stocks_by_model.items()
-            for stock in stocks
-        ),
-        key=lambda stock: float(stock.get("best_score") or 0),
-        reverse=True,
-    )
+    csp_saved_by_model = {
+        model: sorted(stocks, key=lambda stock: float(stock.get("best_score") or 0),
+                      reverse=True)
+        for model, stocks in csp_stocks_by_model.items()
+    }
 
     swing_cache = cached_swing_scan()
     refresh_swing_history_in_background()
@@ -542,7 +539,8 @@ def dashboard():
         scan_runs=scan_runs, scan_runs_loading=scan_runs_loading,
         xsp_refreshing=xsp_refreshing, xsp_history_loading=xsp_history_loading,
         csp_rows=csp_rows, csp_generated=csp_generated,
-        csp_saved_stocks=csp_saved_stocks,
+        csp_saved_v3=csp_saved_by_model.get("v3", []),
+        csp_saved_v2=csp_saved_by_model.get("v2", []),
         csp_v2=sum(row.get("source_model") == "V2" for row in csp_rows),
         csp_v3=sum(row.get("source_model") == "V3" for row in csp_rows),
         csp_refreshing=csp_refreshing, csp_error=csp_error,
@@ -692,6 +690,31 @@ def stats_api():
 @app.get("/history")
 def history():
     return redirect("/xsp#history", code=302)
+
+
+@app.get("/outlook")
+def stock_outlook():
+    symbol = request.args.get("symbol", "").strip()
+    result, error = None, None
+    if symbol:
+        try:
+            symbol = normalize_symbol(symbol)
+            result = analyze_symbol(symbol)
+        except Exception as exc:
+            app.logger.warning("Stock outlook failed for %s: %s", symbol, exc)
+            error = str(exc)
+    return render_template("outlook.html", symbol=symbol, result=result, error=error)
+
+
+@app.get("/api/outlook/<symbol>")
+def stock_outlook_api(symbol: str):
+    try:
+        return jsonify(analyze_symbol(symbol))
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    except Exception as exc:
+        app.logger.exception("Stock outlook API failed")
+        return jsonify({"error": str(exc)}), 503
 
 
 @app.get("/csp")

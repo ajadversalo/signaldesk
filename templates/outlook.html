@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#090d0b"><title>Stock Outlook · Waverider</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static',filename='styles.css') }}"></head>
+<body><div class="noise"></div><main class="shell outlook-shell">
+<header class="topbar"><a class="brand" href="/"><span class="brand-mark">X</span><span>Waverider <em>Signal Desk</em></span></a><nav class="site-nav"><a href="/">Dashboard</a><a href="/xsp">XSP</a><a href="/csp">CSP</a><a href="/swing">Swing</a><a class="active" href="/outlook">Outlook</a><a href="/methodology">Methodology</a></nav></header>
+
+<section class="outlook-hero"><div><p class="eyebrow">Waverider / Probability lab</p><h1>Map the next<br>three weeks.</h1><p class="lede">Compare historically similar market setups over 5, 10, and 15 trading days. The result is a range of outcomes—not a promised price target.</p></div>
+<form class="outlook-form" method="get" action="/outlook"><label for="symbol">Stock symbol</label><div><input id="symbol" name="symbol" value="{{ symbol }}" placeholder="AAPL" maxlength="15" required autocomplete="off" autocapitalize="characters"><button class="button" type="submit">Analyze</button></div><small>Price history is required. Options-implied ranges appear when Yahoo provides a usable chain.</small></form></section>
+
+{% if error %}<section class="error-panel outlook-error"><p class="eyebrow">Analysis unavailable</p><h2>We couldn’t calculate this outlook.</h2><p>{{ error }}</p></section>{% endif %}
+
+{% if result %}
+<section class="outlook-summary"><div><span>Symbol</span><strong>{{ result.symbol }}</strong></div><div><span>Current price</span><strong>${{ '%.2f'|format(result.current_price) }}</strong></div><div><span>Technical bias</span><strong class="{{ 'positive' if result.bias == 'Bullish' else 'negative' if result.bias == 'Bearish' else '' }}">{{ result.bias }}</strong></div><div><span>Data through</span><strong>{{ result.as_of }}</strong></div></section>
+
+<section class="outlook-horizons">
+{% for row in result.outlooks %}<article class="outlook-card"><header><div><p class="eyebrow">{{ row.weeks }} week{{ 's' if row.weeks > 1 }}</p><h2>{{ row.trading_days }} trading days</h2></div><span>{{ row.confidence }}/100 confidence</span></header>
+<div class="outlook-range"><small>Historical 68% outcome range</small><strong>${{ '%.2f'|format(row.range_low) }} <i>to</i> ${{ '%.2f'|format(row.range_high) }}</strong><span>Median outcome region: ${{ '%.2f'|format(row.most_likely) }}</span></div>
+<div class="scenario-bars"><div class="bull" style="--share:{{ row.bullish_probability*100 }}%"><span>Bullish</span><i></i><b>{{ '%.0f%%'|format(row.bullish_probability*100) }}</b></div><div class="neutral" style="--share:{{ row.neutral_probability*100 }}%"><span>Neutral</span><i></i><b>{{ '%.0f%%'|format(row.neutral_probability*100) }}</b></div><div class="bear" style="--share:{{ row.bearish_probability*100 }}%"><span>Bearish</span><i></i><b>{{ '%.0f%%'|format(row.bearish_probability*100) }}</b></div></div>
+{% if row.options_expiry %}<div class="options-move"><span>Options-implied range</span><strong>${{ '%.2f'|format(row.options_range_low) }}–${{ '%.2f'|format(row.options_range_high) }}</strong><small>{{ '%.1f%%'|format(row.implied_volatility*100) }} IV · {{ row.options_expiry }}</small></div>{% else %}<div class="options-move muted"><span>Options-implied range</span><strong>Unavailable</strong><small>Historical model remains active</small></div>{% endif %}
+<footer>{{ row.sample_size }} similar historical observations</footer></article>{% endfor %}
+</section>
+
+<section class="outlook-details"><article class="panel"><div class="panel-heading"><div><p class="eyebrow">Technical state</p><h2>What the market is doing now</h2></div></div><div class="metric-list"><div><span>5-day momentum</span><strong class="{{ 'positive' if result.momentum_5 > 0 else 'negative' }}">{{ '%+.1f%%'|format(result.momentum_5*100) }}</strong></div><div><span>20-day momentum</span><strong class="{{ 'positive' if result.momentum_20 > 0 else 'negative' }}">{{ '%+.1f%%'|format(result.momentum_20*100) }}</strong></div><div><span>RSI (14)</span><strong>{{ '%.1f'|format(result.rsi) }}</strong></div><div><span>Annualized realized volatility</span><strong>{{ '%.1f%%'|format(result.annualized_volatility*100) }}</strong></div></div></article>
+<article class="panel"><div class="panel-heading"><div><p class="eyebrow">Price map</p><h2>Recent reference levels</h2></div></div><div class="level-map"><span style="--position:{{ ((result.current_price-result.support)/(result.resistance-result.support)*100) if result.resistance > result.support else 50 }}%"></span></div><div class="level-labels"><div><small>60-day low / support</small><strong>${{ '%.2f'|format(result.support) }}</strong></div><div><small>Current</small><strong>${{ '%.2f'|format(result.current_price) }}</strong></div><div><small>60-day high / resistance</small><strong>${{ '%.2f'|format(result.resistance) }}</strong></div></div></article></section>
+<section class="outlook-disclaimer"><strong>How to read this</strong><p>Probabilities come from past periods with similar momentum, trend, RSI, and volatility. The range uses the 16th–84th percentiles of those outcomes. Earnings, news, and market shocks can move the stock outside it. Research only—not investment advice.</p></section>
+{% else %}<section class="outlook-empty"><span>01</span><strong>Enter a symbol to begin.</strong><p>The model needs roughly one year of daily history and works best on liquid stocks and ETFs.</p></section>{% endif %}
+<footer><span>Historical similarity is not a guarantee of future performance.</span><a href="/api/outlook/{{ result.symbol if result else 'AAPL' }}">JSON API</a></footer></main></body></html>

@@ -1,5 +1,5 @@
 const CACHE = 'signal-desk-v1';
-const APP_SHELL = ['/', '/xsp', '/csp', '/swing', '/methodology', '/static/styles.css', '/static/strategy-run.js', '/static/pwa.js', '/static/app-icon.svg', '/static/manifest.webmanifest'];
+const APP_SHELL = ['/', '/xsp', '/csp', '/swing', '/outlook', '/methodology', '/static/styles.css', '/static/strategy-run.js', '/static/pwa.js', '/static/app-icon.svg', '/static/manifest.webmanifest'];
 
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(cache => Promise.allSettled(
